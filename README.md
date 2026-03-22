@@ -20,6 +20,8 @@ For deep implementation details, debugging notes, and extension guidance, see `A
 
 ## How to use
 
+**please remind this task is heavy using rate limits.**
+
 ### With Claude Code
 ```bash
 claude
