@@ -7,7 +7,7 @@ The idea is simple:
 - 🧠 the LLM handles planning, interviewing, and orchestration
 - 🖥️ your local machine handles API calls, retries, checkpoints, files, and long-running work
 
-That split matters. Chat-only environments are often weak at filesystem access, internet access, long jobs, and recovery after partial failures. This repo is designed to run on your own machine so the agent can stay conversational while the actual collection and reporting happen locally.
+That split matters. Chat-only environments are often weak at filesystem access, internet access, long jobs, and recovery after partial failures. This repo is designed to run on your own machine so the agent can stay conversational while the actual collection and reporting happen locally. **Note that parallel agents may consume rate limits exponentially.**
 
 ## What this helps you do 🔍
 
