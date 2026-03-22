@@ -1,85 +1,139 @@
 project:
   name: "Smart Home Privacy & Security Concerns"
-  description: "Mining user concerns about smart home device security, data privacy, interoperability, voice recognition, and cost"
+  description: "Social listening brief on surveillance anxiety, security vulnerabilities, interoperability pain, and trust breakdown in connected-home products."
+  objectives:
+    - "Map the major trust failures users describe around smart-home devices."
+    - "Separate privacy anxiety from actual security incidents and day-to-day usability problems."
+    - "Extract high-signal complaints useful for positioning safer and simpler alternatives."
+  target_audiences:
+    - "Smart-home product teams"
+    - "Privacy and security strategy teams"
+    - "Consumer-tech founders and analysts"
+  key_questions:
+    - "Where do users feel watched, over-collected on, or exposed without consent?"
+    - "Which problems are platform lock-in or setup issues disguised as security complaints?"
+    - "What creates the strongest desire for local-first, interoperable, or subscription-free options?"
+  decision_uses:
+    - "Prioritize trust, privacy, and interoperability roadmap themes."
+    - "Refine GTM claims around data minimization and reliability."
 
 analysis:
-  min_comment_words: 15
+  min_comment_words: 10
   include_irrelevant_in_stats: false
+  language_allowlist: ["en"]
+  dedup_normalized_text: true
+  dedup_min_chars: 40
   relevance_keywords:
     - "smart home"
     - "home automation"
-    - "IoT"
+    - "iot"
     - "voice assistant"
     - "smart speaker"
-    - "Alexa"
-    - "Google Home"
+    - "alexa"
+    - "google home"
     - "smart lock"
+    - "camera"
+    - "doorbell"
+    - "matter"
+  segments:
+    VOICE:
+      name: "Voice-assistant household"
+      description: "Homes centered on speakers, assistants, and wake-word interactions."
+      keywords: ["alexa", "google home", "echo", "voice assistant", "wake word"]
+    SECURITY:
+      name: "Security devices"
+      description: "Locks, cameras, alarms, and doorbells used for household safety."
+      keywords: ["camera", "doorbell", "smart lock", "alarm", "security system"]
+    MULTI:
+      name: "Multi-platform automation"
+      description: "Advanced households using hubs, protocols, and multi-vendor integrations."
+      keywords: ["home assistant", "homekit", "matter", "zigbee", "z-wave", "hub"]
   categories:
-    SV:
-      name: "Security vulnerabilities"
-      description: "Hacking risks and device vulnerabilities"
-      keywords: ["hack", "hacking", "exploit", "vulnerability", "breach", "security risk"]
     PR:
       name: "Privacy & data collection"
-      description: "Privacy policies, tracking, and surveillance concerns"
-      keywords: ["privacy", "data", "surveillance", "listening", "tracking", "record"]
+      description: "Feeling listened to, tracked, profiled, or overexposed by default."
+      keywords: ["privacy", "tracking", "recording", "listening", "surveillance", "data collection", "consent"]
+    SV:
+      name: "Security vulnerabilities"
+      description: "Account compromise, hacking anxiety, poor defaults, and exposed devices."
+      keywords: ["hack", "hacked", "exploit", "vulnerability", "breach", "password", "unauthorized"]
     IN:
       name: "Interoperability & integration"
-      description: "Cross-platform compatibility issues"
-      keywords: ["compatibility", "integration", "HomeKit", "Zigbee", "Z-Wave", "matter"]
-    VI:
-      name: "Voice & AI reliability"
-      description: "Misheard commands, false triggers, and assistant errors"
-      keywords: ["voice", "misheard", "false trigger", "assistant", "wake word"]
+      description: "Cross-platform failure, protocol mismatch, and ecosystem lock-in."
+      keywords: ["compatibility", "integration", "matter", "homekit", "zigbee", "z-wave", "hub", "ecosystem"]
+    RL:
+      name: "Reliability & false triggers"
+      description: "Misheard commands, flaky automations, devices going offline, and brittle routines."
+      keywords: ["false trigger", "misheard", "offline", "routine failed", "disconnect", "lag", "unreliable"]
+    UX:
+      name: "Setup complexity"
+      description: "Difficult onboarding, confusing apps, and maintenance overhead."
+      keywords: ["setup", "pairing", "app", "onboarding", "reset", "firmware", "troubleshoot"]
     CO:
       name: "Cost & subscriptions"
-      description: "Hardware cost and recurring fee complaints"
-      keywords: ["cost", "expensive", "price", "subscription", "fee", "monthly"]
+      description: "Recurring fees, paywalled features, and hardware replacement cost."
+      keywords: ["subscription", "monthly", "fee", "paywall", "expensive", "price", "replace"]
     WI:
       name: "Wish / improvements"
-      description: "Explicit wishes and product improvement requests"
-      keywords: ["wish", "hope", "want", "need", "improve"]
+      description: "Requests for local control, better reliability, or more transparent privacy choices."
+      keywords: ["wish", "hope", "want", "need", "better", "improve", "local only"]
   wish_patterns:
     - "\\bwish\\b"
     - "\\bhope\\b"
     - "\\bwant\\b"
     - "\\bneed\\b"
+    - "\\bbetter\\b"
     - "\\bimprove\\b"
 
 platforms:
   youtube:
-    enabled: false
+    enabled: true
     api_key_env: "YOUTUBE_API_KEY"
-    search_queries: []
-    priority_channels: []
-    video_priority_keywords: []
+    search_queries:
+      - "smart home privacy concerns"
+      - "alexa privacy problem"
+      - "smart lock security issue"
+      - "home assistant vs alexa privacy"
+    priority_channels:
+      - name: "The Hook Up"
+        content_style: "technical explainer"
+      - name: "Smart Home Solver"
+        content_style: "consumer review"
+    video_priority_keywords:
+      - "privacy"
+      - "security"
+      - "smart home"
+      - "review"
+      - "home assistant"
+      - "alexa"
     quota:
-      max_channels: 0
-      max_videos_per_channel: 0
-      max_comments_per_video: 0
+      max_channels: 16
+      max_videos_per_channel: 8
+      max_comments_per_video: 140
     transcript:
       enabled: false
       whisper_model: "medium"
-      max_videos: 0
+      max_videos: 12
 
   reddit:
     enabled: true
-    subreddits: ["smarthome", "homeautomation", "privacy", "cybersecurity"]
+    subreddits: ["smarthome", "homeautomation", "privacy", "cybersecurity", "homeassistant"]
     search_queries:
       - "smart home privacy"
-      - "smart home hacking"
-      - "voice assistant privacy"
+      - "alexa listening issue"
+      - "smart lock hacked"
+      - "matter compatibility problem"
     sort: "relevance"
-    time_filter: "all"
+    time_filter: "year"
     quota:
-      max_posts_per_query: 50
-      max_comments_per_post: 100
+      max_posts_per_query: 60
+      max_comments_per_post: 120
 
   twitter:
     enabled: false
     api_key_env: "TWITTER_BEARER_TOKEN"
     search_queries: []
-    search_operators: ""
+    search_operators: "-is:retweet lang:en"
     quota:
       max_results_per_query: 0
       max_total_tweets: 0
@@ -90,6 +144,11 @@ platforms:
     search_queries: []
     quota:
       max_posts: 0
+
+reporting:
+  quote_count: 20
+  max_cooccurrence_pairs: 12
+  top_category_limit: 8
 
 validation:
   enabled: false

@@ -1,10 +1,28 @@
 project:
   name: "Wheelchair Accessibility Unmet Needs"
-  description: "Mining user comments about accessibility challenges faced by wheelchair users in urban environments"
+  description: "Public-conversation listening brief on built-environment friction, transit access, and daily navigation barriers for wheelchair users."
+  objectives:
+    - "Surface the highest-friction accessibility breakdowns in daily mobility."
+    - "Compare transit, street infrastructure, and building-access complaints."
+    - "Capture language that shows exclusion, safety risk, and workaround burden."
+  target_audiences:
+    - "Accessibility product teams"
+    - "Urban mobility and transport operators"
+    - "Public-sector innovation teams"
+  key_questions:
+    - "Where do wheelchair users lose time, dignity, or safety in everyday environments?"
+    - "Which problems are structural infrastructure issues versus service or social issues?"
+    - "Which contexts create explicit desire for better wayfinding, alerts, or support?"
+  decision_uses:
+    - "Prioritize urban accessibility interventions and product opportunities."
+    - "Build sharper segmentation for rider, traveler, and local-navigation use cases."
 
 analysis:
-  min_comment_words: 15
+  min_comment_words: 10
   include_irrelevant_in_stats: false
+  language_allowlist: ["en"]
+  dedup_normalized_text: true
+  dedup_min_chars: 40
   relevance_keywords:
     - "wheelchair"
     - "powerchair"
@@ -12,66 +30,103 @@ analysis:
     - "curb cut"
     - "ramp"
     - "elevator"
+    - "accessible bathroom"
     - "public transit"
     - "sidewalk"
+    - "mobility aid"
+  segments:
+    TRANSIT:
+      name: "Transit"
+      description: "Buses, trains, paratransit, subway lifts, and station access."
+      keywords: ["bus", "train", "subway", "station", "paratransit", "boarding"]
+    STREET:
+      name: "Street & sidewalk"
+      description: "Outdoor navigation, crossings, curb cuts, snow, and pavement."
+      keywords: ["sidewalk", "curb", "curb cut", "crosswalk", "snow", "street", "pothole"]
+    BUILDING:
+      name: "Building access"
+      description: "Entrances, elevators, bathrooms, seating, and indoor movement."
+      keywords: ["elevator", "door", "entrance", "bathroom", "stairs", "table", "aisle"]
   categories:
     PT:
-      name: "Public transport"
-      description: "Access to buses, trains, subways, lifts, and boarding support"
-      keywords: ["bus", "train", "subway", "transport", "ramp", "lift", "boarding"]
+      name: "Public transport friction"
+      description: "Boarding help, lift failures, station access, and unreliable transit accommodations."
+      keywords: ["bus", "train", "subway", "lift", "boarding", "driver", "station", "paratransit"]
     IN:
-      name: "Infrastructure"
-      description: "Sidewalks, curb cuts, potholes, snow removal, and crossings"
-      keywords: ["sidewalk", "pothole", "curb", "curb cut", "snow", "crosswalk"]
+      name: "Street infrastructure"
+      description: "Broken sidewalks, curb cuts, crossings, snow, and hazardous outdoor surfaces."
+      keywords: ["sidewalk", "pothole", "curb", "curb cut", "snow", "crosswalk", "roadwork", "slope"]
     BU:
       name: "Building access"
-      description: "Entrances, elevators, bathrooms, and internal circulation"
-      keywords: ["elevator", "door", "entrance", "bathroom", "stairs"]
+      description: "Doors, ramps, elevators, narrow layouts, and inaccessible interiors."
+      keywords: ["elevator", "door", "entrance", "bathroom", "stairs", "hallway", "narrow", "ramp"]
+    RR:
+      name: "Restroom & interior usability"
+      description: "Accessible bathroom failures, transfer space, counters, and seating layout issues."
+      keywords: ["bathroom", "restroom", "stall", "transfer", "sink", "counter", "table height"]
+    SI:
+      name: "Social & service interaction"
+      description: "Staff behavior, poor assistance, stigma, and being treated as an exception."
+      keywords: ["staff", "help", "ignored", "embarrassed", "stared", "assistance", "attitude"]
     WI:
       name: "Wish / improvements"
-      description: "Explicit improvement wishes"
-      keywords: ["wish", "hope", "want", "need", "improve"]
+      description: "Direct calls for better access, alerts, design, or policy support."
+      keywords: ["wish", "hope", "want", "need", "better", "improve"]
   wish_patterns:
     - "\\bwish\\b"
     - "\\bhope\\b"
     - "\\bwant\\b"
     - "\\bneed\\b"
+    - "\\bbetter\\b"
     - "\\bimprove\\b"
 
 platforms:
   youtube:
-    enabled: false
+    enabled: true
     api_key_env: "YOUTUBE_API_KEY"
-    search_queries: []
-    priority_channels: []
-    video_priority_keywords: []
+    search_queries:
+      - "wheelchair accessibility problems"
+      - "wheelchair public transit experience"
+      - "wheelchair travel barriers"
+    priority_channels:
+      - name: "Wheels2Walking"
+        content_style: "education + lived experience"
+      - name: "Squirmy and Grubs"
+        content_style: "daily life / advocacy"
+    video_priority_keywords:
+      - "wheelchair"
+      - "accessibility"
+      - "travel"
+      - "public transit"
+      - "daily life"
     quota:
-      max_channels: 0
-      max_videos_per_channel: 0
-      max_comments_per_video: 0
+      max_channels: 15
+      max_videos_per_channel: 8
+      max_comments_per_video: 150
     transcript:
       enabled: false
       whisper_model: "medium"
-      max_videos: 0
+      max_videos: 12
 
   reddit:
     enabled: true
-    subreddits: ["wheelchairs", "disability", "accessibility", "travel"]
+    subreddits: ["wheelchairs", "disability", "accessibility", "travel", "urbanplanning"]
     search_queries:
       - "wheelchair accessibility"
-      - "wheelchair curb cut problems"
-      - "accessible public transport"
+      - "curb cut problems"
+      - "elevator out wheelchair"
+      - "accessible bathroom wheelchair"
     sort: "relevance"
-    time_filter: "all"
+    time_filter: "year"
     quota:
-      max_posts_per_query: 50
-      max_comments_per_post: 100
+      max_posts_per_query: 60
+      max_comments_per_post: 120
 
   twitter:
     enabled: false
     api_key_env: "TWITTER_BEARER_TOKEN"
     search_queries: []
-    search_operators: ""
+    search_operators: "-is:retweet lang:en"
     quota:
       max_results_per_query: 0
       max_total_tweets: 0
@@ -82,6 +137,11 @@ platforms:
     search_queries: []
     quota:
       max_posts: 0
+
+reporting:
+  quote_count: 24
+  max_cooccurrence_pairs: 12
+  top_category_limit: 8
 
 validation:
   enabled: false

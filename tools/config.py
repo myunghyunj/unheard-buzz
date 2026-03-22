@@ -57,6 +57,13 @@ class LinkedInConfig:
     max_posts: int = 100
 
 
+@dataclass
+class ReportingConfig:
+    quote_count: int = 25
+    max_cooccurrence_pairs: int = 15
+    top_category_limit: int = 10
+
+
 # ---------------------------------------------------------------------------
 # Unified instruction
 # ---------------------------------------------------------------------------
@@ -67,15 +74,21 @@ class Instruction:
     # Project
     project_name: str = ""
     project_description: str = ""
+    project_objectives: List[str] = field(default_factory=list)
+    project_target_audiences: List[str] = field(default_factory=list)
+    project_key_questions: List[str] = field(default_factory=list)
+    project_decision_uses: List[str] = field(default_factory=list)
     # Shared analysis
     relevance_keywords: List[str] = field(default_factory=list)
     categories: Dict[str, dict] = field(default_factory=dict)
+    segments: Dict[str, dict] = field(default_factory=dict)
     wish_patterns: List[str] = field(default_factory=list)
     include_irrelevant_in_stats: bool = False
     min_comment_words: int = 15
     language_allowlist: List[str] = field(default_factory=list)
     dedup_normalized_text: bool = True
     dedup_min_chars: int = 40
+    reporting: ReportingConfig = field(default_factory=ReportingConfig)
     # Platform configs
     youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
     reddit: RedditConfig = field(default_factory=RedditConfig)
@@ -121,6 +134,12 @@ def load_instruction(yaml_path: str) -> Instruction:
             if not cat.get(req):
                 errors.append(f"analysis.categories.{code}.{req} is required")
 
+    segments = analysis.get("segments", {})
+    for code, segment in segments.items():
+        for req in ("name", "description", "keywords"):
+            if not segment.get(req):
+                errors.append(f"analysis.segments.{code}.{req} is required")
+
     platforms = raw.get("platforms", {})
     any_enabled = any(
         platforms.get(p, {}).get("enabled", False)
@@ -137,8 +156,13 @@ def load_instruction(yaml_path: str) -> Instruction:
     instr = Instruction()
     instr.project_name = project.get("name", "")
     instr.project_description = project.get("description", "")
+    instr.project_objectives = project.get("objectives", [])
+    instr.project_target_audiences = project.get("target_audiences", [])
+    instr.project_key_questions = project.get("key_questions", [])
+    instr.project_decision_uses = project.get("decision_uses", [])
     instr.relevance_keywords = analysis.get("relevance_keywords", [])
     instr.categories = categories
+    instr.segments = segments
     instr.wish_patterns = analysis.get("wish_patterns", [
         r"\bwish\b", r"\bhope\b", r"\bwant\b", r"\bneed\b",
         r"\bif only\b", r"\bwould be nice\b", r"\bshould be\b", r"\bimprove\b",
@@ -150,6 +174,12 @@ def load_instruction(yaml_path: str) -> Instruction:
     instr.language_allowlist = [str(x).lower() for x in analysis.get("language_allowlist", [])]
     instr.dedup_normalized_text = bool(analysis.get("dedup_normalized_text", True))
     instr.dedup_min_chars = int(analysis.get("dedup_min_chars", 40))
+    reporting = raw.get("reporting", {})
+    instr.reporting = ReportingConfig(
+        quote_count=int(reporting.get("quote_count", 25)),
+        max_cooccurrence_pairs=int(reporting.get("max_cooccurrence_pairs", 15)),
+        top_category_limit=int(reporting.get("top_category_limit", 10)),
+    )
 
     yt = platforms.get("youtube", {})
     if yt.get("enabled"):
@@ -235,6 +265,8 @@ class SocialPost:
     relevance_score: float = 0.0
     categories: List[str] = field(default_factory=list)
     category_scores: Dict[str, float] = field(default_factory=dict)
+    segments: List[str] = field(default_factory=list)
+    segment_scores: Dict[str, float] = field(default_factory=dict)
     final_rank_score: float = 0.0
     has_wish: bool = False
     word_count: int = 0
@@ -257,6 +289,8 @@ class SocialPost:
             "relevance_score": self.relevance_score,
             "categories": "|".join(self.categories),
             "category_scores": json_dumps_safe(self.category_scores),
+            "segments": "|".join(self.segments),
+            "segment_scores": json_dumps_safe(self.segment_scores),
             "final_rank_score": self.final_rank_score,
             "has_wish": self.has_wish,
             "word_count": self.word_count,
@@ -269,6 +303,7 @@ class SocialPost:
             "post_id", "platform", "source_id", "source_title", "author",
             "text", "like_count", "is_reply", "timestamp", "url",
             "is_relevant", "relevance_score", "categories", "category_scores",
+            "segments", "segment_scores",
             "final_rank_score", "has_wish", "word_count", "analysis_complete",
         ]
 

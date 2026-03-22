@@ -1,85 +1,138 @@
 project:
   name: "Indie Game Developer Publishing Challenges"
-  description: "Mining comments from indie game developers about platform policies, revenue share, marketing, tools, and player feedback"
+  description: "Research brief on how indie developers describe publishing, launch, discoverability, and post-launch support pain across creator communities."
+  objectives:
+    - "Map the most frequent obstacles between making a game and getting traction."
+    - "Separate platform-policy issues from marketing, tooling, and team-capacity problems."
+    - "Capture language that signals burnout, launch anxiety, or commercial dead ends."
+  target_audiences:
+    - "Publishing tools and platform teams"
+    - "Indie-support accelerators and funds"
+    - "Developer infrastructure startups"
+  key_questions:
+    - "Where do indies feel blocked by storefronts, platform rules, or launch process opacity?"
+    - "Which issues are actually discoverability and audience-fit problems rather than tooling gaps?"
+    - "What gets framed as 'I can build it, but I can't ship or sell it'?"
+  decision_uses:
+    - "Prioritize product bets around launch support, QA, analytics, and discoverability."
+    - "Refine messaging for indie publishing and GTM support products."
 
 analysis:
-  min_comment_words: 15
+  min_comment_words: 10
   include_irrelevant_in_stats: false
+  language_allowlist: ["en"]
+  dedup_normalized_text: true
+  dedup_min_chars: 40
   relevance_keywords:
     - "indie game"
     - "indie developer"
     - "game publishing"
-    - "Steam publishing"
+    - "steam page"
+    - "steam publishing"
     - "itch.io"
-    - "Unity"
-    - "Unreal Engine"
-    - "game marketing"
+    - "unity"
+    - "unreal"
+    - "wishlist"
+    - "launch"
+    - "discoverability"
+  segments:
+    SOLO:
+      name: "Solo / tiny team"
+      description: "Solo devs and very small teams with constrained bandwidth."
+      keywords: ["solo dev", "solo developer", "small team", "just me", "tiny team"]
+    STEAM:
+      name: "Steam-first"
+      description: "Developers mainly focused on Steam launch and storefront performance."
+      keywords: ["steam", "wishlist", "steam page", "steam next fest", "reviews"]
+    MULTI:
+      name: "Multi-platform / console"
+      description: "Teams shipping beyond PC into console, certification, and porting work."
+      keywords: ["console", "switch", "playstation", "xbox", "porting", "certification"]
   categories:
     PP:
       name: "Platform policies & approval"
-      description: "Submission, approval, and policy compliance"
-      keywords: ["platform", "policy", "approval", "submission", "rejection", "compliance"]
+      description: "Submission rules, certification, account risk, and opaque approval processes."
+      keywords: ["approval", "submission", "policy", "certification", "rejection", "compliance", "platform rules"]
     FE:
       name: "Fees & revenue share"
-      description: "Revenue splits and platform fees"
-      keywords: ["fee", "revenue", "commission", "share", "royalty", "cut"]
+      description: "Revenue splits, taxes, fees, cash-flow, and platform economics."
+      keywords: ["revenue share", "fee", "commission", "royalty", "tax", "cut", "refund"]
     MA:
       name: "Marketing & discoverability"
-      description: "Promotion and storefront visibility"
-      keywords: ["marketing", "discoverability", "visibility", "promotion", "algorithm"]
-    DE:
-      name: "Development tools & engine support"
-      description: "Engine tooling and support pain points"
-      keywords: ["engine", "Unity", "Unreal", "tool", "support", "SDK", "plugin"]
+      description: "Wishlists, storefront visibility, creator outreach, and launch traction."
+      keywords: ["marketing", "discoverability", "wishlist", "visibility", "algorithm", "promotion", "trailer"]
+    TL:
+      name: "Tooling & build pipeline"
+      description: "Engine issues, SDK pain, porting friction, deployment complexity, and broken workflows."
+      keywords: ["unity", "unreal", "build", "pipeline", "sdk", "plugin", "porting", "ci"]
     QA:
-      name: "Player feedback & QA"
-      description: "Testing, bug reports, and player reviews"
-      keywords: ["feedback", "bug", "testing", "QA", "review", "patch", "update"]
+      name: "QA & post-launch support"
+      description: "Testing, bugs, patching, community support, and review management."
+      keywords: ["bug", "qa", "testing", "patch", "support", "review bomb", "crash", "update"]
+    BT:
+      name: "Burnout & bandwidth"
+      description: "Time pressure, context-switching, emotional exhaustion, and doing everything manually."
+      keywords: ["burnout", "exhausted", "time", "too much", "overwhelmed", "doing everything", "bandwidth"]
     WI:
       name: "Wish / improvements"
-      description: "Explicit improvement wishes"
-      keywords: ["wish", "hope", "want", "need", "improve"]
+      description: "Requests for better tooling, platform clarity, or publisher support."
+      keywords: ["wish", "hope", "want", "need", "better", "improve"]
   wish_patterns:
     - "\\bwish\\b"
     - "\\bhope\\b"
     - "\\bwant\\b"
     - "\\bneed\\b"
+    - "\\bbetter\\b"
     - "\\bimprove\\b"
 
 platforms:
   youtube:
-    enabled: false
+    enabled: true
     api_key_env: "YOUTUBE_API_KEY"
-    search_queries: []
-    priority_channels: []
-    video_priority_keywords: []
+    search_queries:
+      - "indie game marketing problems"
+      - "steam launch postmortem indie"
+      - "solo developer burnout publishing"
+    priority_channels:
+      - name: "Game Dev Unlocked"
+        content_style: "indie marketing"
+      - name: "Thomas Brush"
+        content_style: "creator advice"
+    video_priority_keywords:
+      - "indie game"
+      - "steam"
+      - "marketing"
+      - "launch"
+      - "postmortem"
+      - "wishlist"
     quota:
-      max_channels: 0
-      max_videos_per_channel: 0
-      max_comments_per_video: 0
+      max_channels: 15
+      max_videos_per_channel: 8
+      max_comments_per_video: 140
     transcript:
       enabled: false
       whisper_model: "medium"
-      max_videos: 0
+      max_videos: 10
 
   reddit:
     enabled: true
-    subreddits: ["gamedev", "indiegames", "Unity3D", "unrealengine"]
+    subreddits: ["gamedev", "indiegames", "Unity3D", "unrealengine", "IndieDev"]
     search_queries:
       - "indie game publishing problems"
-      - "Steam approval process indie"
-      - "revenue share indie game"
+      - "steam wishlist frustration"
+      - "solo dev marketing"
+      - "console certification indie"
     sort: "relevance"
-    time_filter: "all"
+    time_filter: "year"
     quota:
-      max_posts_per_query: 50
-      max_comments_per_post: 100
+      max_posts_per_query: 60
+      max_comments_per_post: 120
 
   twitter:
     enabled: false
     api_key_env: "TWITTER_BEARER_TOKEN"
     search_queries: []
-    search_operators: ""
+    search_operators: "-is:retweet lang:en"
     quota:
       max_results_per_query: 0
       max_total_tweets: 0
@@ -90,6 +143,11 @@ platforms:
     search_queries: []
     quota:
       max_posts: 0
+
+reporting:
+  quote_count: 24
+  max_cooccurrence_pairs: 12
+  top_category_limit: 8
 
 validation:
   enabled: false

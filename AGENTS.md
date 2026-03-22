@@ -3,7 +3,7 @@
 This file is for Codex and similar repo-aware agents.
 Use it as the runtime playbook for operating `unheard-buzz`.
 
-Deep technical review material lives in `ARCHITECTURE.md`.
+Deep technical review material lives in `docs/ARCHITECTURE.md`.
 Read that file when you need internals, debugging details, extension guidance, or review context.
 
 ## Mission
@@ -137,9 +137,9 @@ When summarizing for the user:
 - LinkedIn: no public search API; use `input/linkedin_export.csv`
 - Empty or noisy results: expand `relevance_keywords`, tighten categories, improve search seeds
 
-## When to open ARCHITECTURE.md
+## When to open docs/ARCHITECTURE.md
 
-Read `ARCHITECTURE.md` when you need:
+Read `docs/ARCHITECTURE.md` when you need:
 
 - module-by-module responsibilities
 - data flow and checkpoint behavior
@@ -148,4 +148,4 @@ Read `ARCHITECTURE.md` when you need:
 - known limitations and edge cases
 
 Keep this file focused on operation.
-Keep deep internals in `ARCHITECTURE.md`.
+Keep deep internals in `docs/ARCHITECTURE.md`.

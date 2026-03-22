@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Amputee Sample Output - Wish Intensity Donut</title>
+  <style>
+    :root {
+      --color-bg: #f6f3ee;
+      --color-surface: #ffffff;
+      --color-border: #dfd9cf;
+      --color-text-primary: #201d18;
+      --color-text-secondary: #6a645b;
+      --shadow: 0 12px 30px rgba(32, 29, 24, 0.08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #171512;
+        --color-surface: #211d19;
+        --color-border: #38322a;
+        --color-text-primary: #f3ede3;
+        --color-text-secondary: #c8bfae;
+        --shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+      }
+    }
+
+    body {
+      margin: 0;
+      padding: 32px;
+      background: radial-gradient(circle at top left, rgba(216, 90, 48, 0.12), transparent 32%), var(--color-bg);
+      color: var(--color-text-primary);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .card {
+      max-width: 880px;
+      margin: 0 auto;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-secondary);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .subhead {
+      margin: 0 0 24px;
+      color: var(--color-text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <p class="eyebrow">Amputee Sample Output</p>
+    <h1>Wish Intensity by Category</h1>
+    <p class="subhead">Standalone sample visualization derived from the prior amputee analysis package.</p>
+
+    <div style="padding: 1rem 0;">
+      <div style="font-size: 14px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px;">Where solutions are most absent</div>
+      <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 20px;">Wish intensity per category, normalized to 100%. N = 1,252 relevant comments from 6,503 total.</div>
+
+      <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
+        <div style="position: relative; width: 300px; height: 300px; flex-shrink: 0;">
+          <canvas id="donut"></canvas>
+        </div>
+        <div id="legend" style="font-size: 13px; line-height: 2.2; flex: 1; min-width: 180px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script>
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const cats = [
+    { name: 'Sensory feedback', raw: 50.0 },
+    { name: 'Service / training', raw: 48.9 },
+    { name: 'Skin / hygiene', raw: 45.2 },
+    { name: 'Heat / sweat', raw: 42.9 },
+    { name: 'Emotional', raw: 39.1 },
+    { name: 'Access / cost', raw: 38.3 },
+    { name: 'Control (UL)', raw: 36.4 },
+    { name: 'Activity limitation', raw: 33.7 },
+    { name: 'Don / doff', raw: 32.5 },
+    { name: 'Pain (mechanical)', raw: 31.0 },
+    { name: 'Weight / durability', raw: 30.7 },
+    { name: 'Mobility / gait', raw: 29.8 },
+    { name: 'Socket fit / volume', raw: 23.7 },
+    { name: 'Phantom pain', raw: 22.7 }
+  ];
+
+  const total = cats.reduce((sum, cat) => sum + cat.raw, 0);
+  const normalized = cats.map(cat => Math.round(cat.raw / total * 1000) / 10);
+
+  const palette = isDark
+    ? ['#F0997B','#ED93B1','#F5C4B3','#FAC775','#AFA9EC','#85B7EB','#F09595','#9FE1CB',
+       '#5DCAA5','#B5D4F4','#C0DD97','#CECBF6','#D3D1C7','#B4B2A9']
+    : ['#D85A30','#D4537E','#993C1D','#BA7517','#7F77DD','#378ADD','#E24B4A','#1D9E75',
+       '#0F6E56','#185FA5','#639922','#534AB7','#888780','#5F5E5A'];
+
+  new Chart(document.getElementById('donut'), {
+    type: 'doughnut',
+    data: {
+      labels: cats.map(cat => cat.name),
+      datasets: [{
+        data: normalized,
+        backgroundColor: palette,
+        borderColor: isDark ? '#1a1a18' : '#ffffff',
+        borderWidth: 2,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '55%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: context => ` ${context.parsed}% of total wish intensity`
+          }
+        }
+      }
+    }
+  });
+
+  const legendEl = document.getElementById('legend');
+  cats.forEach((cat, index) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const dot = document.createElement('span');
+    dot.style.cssText = `width:10px;height:10px;border-radius:2px;background:${palette[index]};flex-shrink:0;`;
+    const label = document.createElement('span');
+    label.style.color = 'var(--color-text-secondary)';
+    label.innerHTML = `<span style="color:var(--color-text-primary);font-weight:500;">${normalized[index]}%</span> ${cat.name}`;
+    row.appendChild(dot);
+    row.appendChild(label);
+    legendEl.appendChild(row);
+  });
+  </script>
+</body>
+</html>

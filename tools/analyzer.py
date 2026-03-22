@@ -82,6 +82,10 @@ def filter_posts(posts: List[SocialPost], instruction: Instruction) -> List[Soci
         code: _build_keyword_regex(cat["keywords"])
         for code, cat in instruction.categories.items()
     }
+    segment_res = {
+        code: _build_keyword_regex(segment["keywords"])
+        for code, segment in instruction.segments.items()
+    }
 
     filtered: List[SocialPost] = []
 
@@ -126,8 +130,22 @@ def filter_posts(posts: List[SocialPost], instruction: Instruction) -> List[Soci
                 reverse=True
             )[:1]
 
+        segment_scores: Dict[str, float] = {}
+        assigned_segments: List[str] = []
+        for code, seg_re in segment_res.items():
+            hits = _count_keyword_hits(seg_re, text_lower)
+            score = _score_from_hits(
+                hits,
+                len(instruction.segments.get(code, {}).get("keywords", [])),
+            )
+            if score > 0:
+                segment_scores[code] = score
+                assigned_segments.append(code)
+
         post.category_scores = category_scores
         post.categories = assigned_categories
+        post.segment_scores = segment_scores
+        post.segments = assigned_segments
         post.final_rank_score = compute_final_rank_score(post)
         post.analysis_complete = True
         filtered.append(post)
@@ -219,7 +237,10 @@ def get_cross_platform_insights(posts: List[SocialPost], instruction: Instructio
         if unique:
             platform_unique[platform] = sorted(unique)
 
-    co_occurrences = _compute_co_occurrences(posts)
+    co_occurrences = _compute_co_occurrences(
+        posts,
+        limit=max(1, getattr(instruction.reporting, "max_cooccurrence_pairs", 15)),
+    )
 
     return {
         "platform_breakdown": {
@@ -232,7 +253,7 @@ def get_cross_platform_insights(posts: List[SocialPost], instruction: Instructio
     }
 
 
-def _compute_co_occurrences(posts: List[SocialPost]) -> List[dict]:
+def _compute_co_occurrences(posts: List[SocialPost], limit: int = 10) -> List[dict]:
     pair_counts: Dict[tuple, int] = defaultdict(int)
 
     for post in posts:
@@ -241,7 +262,7 @@ def _compute_co_occurrences(posts: List[SocialPost]) -> List[dict]:
             for j in range(i + 1, len(cats)):
                 pair_counts[(cats[i], cats[j])] += 1
 
-    ranked = sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    ranked = sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
     return [
         {"pair": list(pair), "count": count}
         for pair, count in ranked

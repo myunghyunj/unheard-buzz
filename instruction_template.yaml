@@ -1,48 +1,76 @@
 # ============================================================================
 # unheard-buzz — Instruction Template
 # ============================================================================
-# Define your market-needs analysis. The agent will generate this for you
-# during the interview (Stage 1), but you can also write it manually.
+# Usage:
+#   python3 tools/run.py --instruction instruction.yaml
 #
-# Usage: python tools/run.py --instruction your_file.yaml
+# Authoring philosophy:
+# - Keep the project brief decision-oriented.
+# - Make relevance keywords broad enough to catch real conversation.
+# - Make categories specific enough to support prioritization.
+# - Add segments when you want structured comparisons inside the report.
 # ============================================================================
 
 project:
   name: "Your Project Name"
-  description: "What market need or user pain point you're investigating"
+  description: "What unmet need, market, workflow, or user pain point you are investigating"
+  objectives:
+    - "Identify the most common unmet needs expressed in public conversation"
+    - "Surface quotable voice-of-customer language for product and GTM teams"
+  target_audiences:
+    - "Product team"
+    - "Founder / GM"
+    - "Research / Insights"
+  key_questions:
+    - "What are users struggling with most today?"
+    - "Which issues generate explicit wish or improvement language?"
+    - "Which segments or platforms over-index on certain complaints?"
+  decision_uses:
+    - "Prioritize roadmap bets"
+    - "Shape messaging and positioning"
+    - "Choose follow-up qualitative interviews"
 
 analysis:
-  # Drop very short comments before analysis
   min_comment_words: 15
-
-  # Count only relevant posts in summary stats by default
   include_irrelevant_in_stats: false
 
-  # Optional language filtering for collectors that expose language hints
+  # Optional language filtering for collectors that expose language hints.
   # Example: ["en"] or ["en", "ko"]
   language_allowlist: []
 
-  # Deduplicate near-identical normalized text across collectors
+  # Deduplicate near-identical normalized text across overlapping searches.
   dedup_normalized_text: true
   dedup_min_chars: 40
 
-  # Words that mark a post as on-topic for your domain
+  # Broad domain markers used to decide whether a post is on-topic.
   relevance_keywords:
     - "keyword1"
     - "keyword2"
+    - "keyword3"
 
-  # Categories for classifying complaints/needs (5-15 recommended)
+  # Optional segment schema for side-by-side comparisons in summary reports.
+  segments:
+    SEG1:
+      name: "Segment Name"
+      description: "Who or what this segment represents"
+      keywords: ["segment keyword a", "segment keyword b"]
+
+  # Categories for classifying pain points, barriers, or desired outcomes.
   categories:
     CAT1:
       name: "Category Name"
-      description: "What this captures"
-      keywords: ["keyword_a", "keyword_b"]
+      description: "What this category captures"
+      keywords: ["keyword_a", "keyword_b", "keyword_c"]
+      opportunity_signals:
+        - "Moments where users describe workarounds, unmet expectations, or purchase friction"
+      example_phrases:
+        - "I wish..."
+        - "This never works when..."
     CAT2:
       name: "Another Category"
-      description: "Description"
-      keywords: ["keyword_c", "keyword_d"]
+      description: "A different unmet-need bucket"
+      keywords: ["keyword_d", "keyword_e"]
 
-  # Patterns that flag posts expressing improvement desires
   wish_patterns:
     - "\\bwish\\b"
     - "\\bhope\\b"
@@ -53,9 +81,6 @@ analysis:
     - "\\bshould be\\b"
     - "\\bimprove\\b"
 
-# --- Platforms ---
-# Enable the ones you have API access to.
-
 platforms:
   youtube:
     enabled: true
@@ -63,15 +88,19 @@ platforms:
     search_queries:
       - "your topic review"
       - "your topic problems"
+      - "your topic daily life"
     priority_channels:
       - handle: "@examplechannel"
         name: "Example Channel"
+        content_style: "vlog"
+        rationale: "Known for firsthand user stories"
     video_priority_keywords:
       - "review"
       - "problems"
       - "honest"
       - "comparison"
       - "experience"
+      - "daily life"
     quota:
       max_channels: 20
       max_videos_per_channel: 8
@@ -88,6 +117,7 @@ platforms:
       - "relevant_subreddit"
     search_queries:
       - "your topic discussion"
+      - "your topic problems"
     sort: "relevance"
     time_filter: "year"
     quota:
@@ -112,7 +142,11 @@ platforms:
     quota:
       max_posts: 50
 
-# --- Validation (optional) ---
+reporting:
+  quote_count: 25
+  max_cooccurrence_pairs: 15
+  top_category_limit: 10
+
 validation:
   enabled: false
   references:

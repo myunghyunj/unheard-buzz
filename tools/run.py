@@ -55,6 +55,8 @@ def _posts_to_dicts(posts: List[SocialPost]) -> List[dict]:
             "relevance_score": p.relevance_score,
             "categories": p.categories,
             "category_scores": p.category_scores,
+            "segments": p.segments,
+            "segment_scores": p.segment_scores,
             "final_rank_score": p.final_rank_score,
             "has_wish": p.has_wish,
             "word_count": p.word_count,
@@ -71,6 +73,9 @@ def _dicts_to_posts(dicts: List[dict]) -> List[SocialPost]:
         cats = d.get("categories", [])
         if isinstance(cats, str):
             cats = [c for c in cats.split("|") if c]
+        segments = d.get("segments", [])
+        if isinstance(segments, str):
+            segments = [s for s in segments.split("|") if s]
         post = SocialPost(
             post_id=d.get("post_id", ""),
             platform=d.get("platform", ""),
@@ -88,6 +93,8 @@ def _dicts_to_posts(dicts: List[dict]) -> List[SocialPost]:
             relevance_score=float(d.get("relevance_score", 0.0)),
             categories=cats,
             category_scores=d.get("category_scores", {}) if isinstance(d.get("category_scores", {}), dict) else {},
+            segments=segments,
+            segment_scores=d.get("segment_scores", {}) if isinstance(d.get("segment_scores", {}), dict) else {},
             final_rank_score=float(d.get("final_rank_score", 0.0)),
             has_wish=d.get("has_wish", False),
             word_count=int(d.get("word_count", 0)),
@@ -244,6 +251,7 @@ def run_pipeline(
     all_posts: List[SocialPost] = []
     platform_stats: Dict[str, int] = {}
     platform_errors: Dict[str, str] = {}
+    collector_context: Dict[str, dict] = {}
 
     if resume:
         cp = _load_checkpoint("phase1_collection", output_dir)
@@ -252,6 +260,7 @@ def run_pipeline(
             all_posts = _dicts_to_posts(cp.get("posts", []))
             platform_stats = cp.get("platform_stats", {})
             platform_errors = cp.get("platform_errors", {})
+            collector_context = cp.get("collector_context", {})
 
     if not all_posts:
         with ThreadPoolExecutor(max_workers=len(enabled)) as executor:
@@ -267,6 +276,11 @@ def run_pipeline(
                     posts = result.get("posts", [])
                     all_posts.extend(posts)
                     platform_stats[platform] = len(posts)
+                    collector_context[platform] = {
+                        key: value
+                        for key, value in result.items()
+                        if key != "posts"
+                    }
                     error = result.get("error")
                     if error:
                         platform_errors[platform] = error
@@ -280,6 +294,7 @@ def run_pipeline(
             "posts": _posts_to_dicts(all_posts),
             "platform_stats": platform_stats,
             "platform_errors": platform_errors,
+            "collector_context": collector_context,
         }, output_dir)
 
     print(f"\n  Total raw posts: {len(all_posts)}")
@@ -341,7 +356,12 @@ def run_pipeline(
     print("PHASE 3: Report Generation")
     print("=" * 60)
 
-    generated = generate_all(all_posts, instruction, output_dir)
+    generated = generate_all(
+        all_posts,
+        instruction,
+        output_dir,
+        collector_context=collector_context,
+    )
     if tsi_result and tsi_result.get("report_path"):
         generated["tsi_anomaly_report_md"] = tsi_result["report_path"]
     _save_checkpoint("phase3_reports", {"generated_files": generated}, output_dir)
@@ -457,6 +477,7 @@ def _dry_run(instruction: Instruction, platforms: List[str], output_dir: str):
 
     print(f"Relevance keywords: {len(instruction.relevance_keywords)}")
     print(f"Wish patterns: {len(instruction.wish_patterns)}")
+    print(f"Segments: {len(instruction.segments)}")
     print(f"Minimum words: {instruction.min_comment_words}")
     print(
         "Language allowlist: "
@@ -465,6 +486,8 @@ def _dry_run(instruction: Instruction, platforms: List[str], output_dir: str):
     print(f"Normalized-text dedup: {instruction.dedup_normalized_text}")
     print(f"Dedup min chars: {instruction.dedup_min_chars}")
     print(f"Include irrelevant in stats: {instruction.include_irrelevant_in_stats}")
+    print(f"Quote count: {instruction.reporting.quote_count}")
+    print(f"Max co-occurrence pairs: {instruction.reporting.max_cooccurrence_pairs}")
     print(f"TSI enabled: {tsi_enabled}")
     print(f"Validation: {'enabled' if instruction.validation_enabled else 'disabled'}")
     print()

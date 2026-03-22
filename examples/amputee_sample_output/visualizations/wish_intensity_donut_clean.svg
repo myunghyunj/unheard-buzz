@@ -1,0 +1,68 @@
+<svg width="920" height="580" viewBox="0 0 920 580" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Amputee sample output - wish intensity donut</title>
+  <desc id="desc">Static preview of wish intensity by category from the amputee sample output bundle.</desc>
+
+  <rect x="20" y="20" width="880" height="540" rx="26" fill="#FCFAF7" stroke="#E7DED2"/>
+
+  <text x="56" y="72" fill="#8A7F72" font-size="13" font-family="Arial, Helvetica, sans-serif" letter-spacing="1.6">AMPUTEE SAMPLE OUTPUT</text>
+  <text x="56" y="108" fill="#201D18" font-size="30" font-weight="700" font-family="Arial, Helvetica, sans-serif">Wish Intensity by Category</text>
+  <text x="56" y="136" fill="#6A645B" font-size="15" font-family="Arial, Helvetica, sans-serif">Where solutions feel most absent, normalized to 100% of wish intensity.</text>
+  <text x="56" y="158" fill="#6A645B" font-size="13" font-family="Arial, Helvetica, sans-serif">N = 1,252 relevant comments from 6,503 total comments.</text>
+
+  <g transform="rotate(-90 220 314)">
+    <circle cx="220" cy="314" r="84" stroke="#EFE8DE" stroke-width="34"/>
+    <circle cx="220" cy="314" r="84" stroke="#D85A30" stroke-width="34" stroke-dasharray="52.251 475.537" stroke-dashoffset="0"/>
+    <circle cx="220" cy="314" r="84" stroke="#D4537E" stroke-width="34" stroke-dasharray="51.195 476.592" stroke-dashoffset="-52.251"/>
+    <circle cx="220" cy="314" r="84" stroke="#993C1D" stroke-width="34" stroke-dasharray="47.501 480.287" stroke-dashoffset="-103.446"/>
+    <circle cx="220" cy="314" r="84" stroke="#BA7517" stroke-width="34" stroke-dasharray="44.862 482.926" stroke-dashoffset="-150.947"/>
+    <circle cx="220" cy="314" r="84" stroke="#7F77DD" stroke-width="34" stroke-dasharray="40.640 487.148" stroke-dashoffset="-195.809"/>
+    <circle cx="220" cy="314" r="84" stroke="#378ADD" stroke-width="34" stroke-dasharray="40.112 487.676" stroke-dashoffset="-236.449"/>
+    <circle cx="220" cy="314" r="84" stroke="#E24B4A" stroke-width="34" stroke-dasharray="38.001 489.787" stroke-dashoffset="-276.561"/>
+    <circle cx="220" cy="314" r="84" stroke="#1D9E75" stroke-width="34" stroke-dasharray="35.362 492.426" stroke-dashoffset="-314.561"/>
+    <circle cx="220" cy="314" r="84" stroke="#0F6E56" stroke-width="34" stroke-dasharray="33.778 494.009" stroke-dashoffset="-349.923"/>
+    <circle cx="220" cy="314" r="84" stroke="#185FA5" stroke-width="34" stroke-dasharray="32.195 495.593" stroke-dashoffset="-383.702"/>
+    <circle cx="220" cy="314" r="84" stroke="#639922" stroke-width="34" stroke-dasharray="32.195 495.593" stroke-dashoffset="-415.897"/>
+    <circle cx="220" cy="314" r="84" stroke="#534AB7" stroke-width="34" stroke-dasharray="31.139 496.648" stroke-dashoffset="-448.092"/>
+    <circle cx="220" cy="314" r="84" stroke="#888780" stroke-width="34" stroke-dasharray="24.806 502.982" stroke-dashoffset="-479.231"/>
+    <circle cx="220" cy="314" r="84" stroke="#5F5E5A" stroke-width="34" stroke-dasharray="23.750 504.037" stroke-dashoffset="-504.037"/>
+  </g>
+
+  <circle cx="220" cy="314" r="60" fill="#FCFAF7"/>
+  <text x="220" y="302" text-anchor="middle" fill="#8A7F72" font-size="12" font-weight="700" font-family="Arial, Helvetica, sans-serif" letter-spacing="1.4">VOICE SIGNAL</text>
+  <text x="220" y="327" text-anchor="middle" fill="#201D18" font-size="28" font-weight="700" font-family="Arial, Helvetica, sans-serif">Wish</text>
+  <text x="220" y="350" text-anchor="middle" fill="#201D18" font-size="28" font-weight="700" font-family="Arial, Helvetica, sans-serif">Intensity</text>
+
+  <g font-family="Arial, Helvetica, sans-serif" font-size="15">
+    <rect x="420" y="182" width="12" height="12" rx="2" fill="#D85A30"/>
+    <text x="444" y="193" fill="#201D18"><tspan font-weight="700">9.9%</tspan><tspan fill="#6A645B"> Sensory feedback</tspan></text>
+    <rect x="420" y="210" width="12" height="12" rx="2" fill="#D4537E"/>
+    <text x="444" y="221" fill="#201D18"><tspan font-weight="700">9.7%</tspan><tspan fill="#6A645B"> Service / training</tspan></text>
+    <rect x="420" y="238" width="12" height="12" rx="2" fill="#993C1D"/>
+    <text x="444" y="249" fill="#201D18"><tspan font-weight="700">9.0%</tspan><tspan fill="#6A645B"> Skin / hygiene</tspan></text>
+    <rect x="420" y="266" width="12" height="12" rx="2" fill="#BA7517"/>
+    <text x="444" y="277" fill="#201D18"><tspan font-weight="700">8.5%</tspan><tspan fill="#6A645B"> Heat / sweat</tspan></text>
+    <rect x="420" y="294" width="12" height="12" rx="2" fill="#7F77DD"/>
+    <text x="444" y="305" fill="#201D18"><tspan font-weight="700">7.7%</tspan><tspan fill="#6A645B"> Emotional</tspan></text>
+    <rect x="420" y="322" width="12" height="12" rx="2" fill="#378ADD"/>
+    <text x="444" y="333" fill="#201D18"><tspan font-weight="700">7.6%</tspan><tspan fill="#6A645B"> Access / cost</tspan></text>
+    <rect x="420" y="350" width="12" height="12" rx="2" fill="#E24B4A"/>
+    <text x="444" y="361" fill="#201D18"><tspan font-weight="700">7.2%</tspan><tspan fill="#6A645B"> Control (UL)</tspan></text>
+    <rect x="420" y="378" width="12" height="12" rx="2" fill="#1D9E75"/>
+    <text x="444" y="389" fill="#201D18"><tspan font-weight="700">6.7%</tspan><tspan fill="#6A645B"> Activity limitation</tspan></text>
+    <rect x="420" y="406" width="12" height="12" rx="2" fill="#0F6E56"/>
+    <text x="444" y="417" fill="#201D18"><tspan font-weight="700">6.4%</tspan><tspan fill="#6A645B"> Don / doff</tspan></text>
+    <rect x="420" y="434" width="12" height="12" rx="2" fill="#185FA5"/>
+    <text x="444" y="445" fill="#201D18"><tspan font-weight="700">6.1%</tspan><tspan fill="#6A645B"> Pain (mechanical)</tspan></text>
+
+    <rect x="640" y="182" width="12" height="12" rx="2" fill="#639922"/>
+    <text x="664" y="193" fill="#201D18"><tspan font-weight="700">6.1%</tspan><tspan fill="#6A645B"> Weight / durability</tspan></text>
+    <rect x="640" y="210" width="12" height="12" rx="2" fill="#534AB7"/>
+    <text x="664" y="221" fill="#201D18"><tspan font-weight="700">5.9%</tspan><tspan fill="#6A645B"> Mobility / gait</tspan></text>
+    <rect x="640" y="238" width="12" height="12" rx="2" fill="#888780"/>
+    <text x="664" y="249" fill="#201D18"><tspan font-weight="700">4.7%</tspan><tspan fill="#6A645B"> Socket fit / volume</tspan></text>
+    <rect x="640" y="266" width="12" height="12" rx="2" fill="#5F5E5A"/>
+    <text x="664" y="277" fill="#201D18"><tspan font-weight="700">4.5%</tspan><tspan fill="#6A645B"> Phantom pain</tspan></text>
+  </g>
+
+  <text x="56" y="514" fill="#6A645B" font-size="13" font-family="Arial, Helvetica, sans-serif">Static preview for README use. Interactive HTML version lives beside this file.</text>
+</svg>

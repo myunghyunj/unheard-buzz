@@ -12,7 +12,7 @@ if TOOLS_DIR not in sys.path:
 
 from analyzer import compute_final_rank_score, filter_posts, representative_posts_by_category
 from config import SocialPost, load_instruction
-from reports import generate_summary_report, generate_summary_stats
+from reports import generate_all, generate_summary_report, generate_summary_stats
 from youtube import _convert_comments_to_posts
 
 
@@ -31,6 +31,11 @@ class PipelineContractsTest(unittest.TestCase):
               dedup_normalized_text: true
               dedup_min_chars: 30
               relevance_keywords: ["charger"]
+              segments:
+                URBAN:
+                  name: "Urban"
+                  description: "Dense city use cases"
+                  keywords: ["city", "urban"]
               categories:
                 REL:
                   name: "Reliability"
@@ -51,6 +56,11 @@ class PipelineContractsTest(unittest.TestCase):
             validation:
               enabled: false
               references: []
+
+            reporting:
+              quote_count: 12
+              max_cooccurrence_pairs: 8
+              top_category_limit: 6
             """
         )
 
@@ -67,6 +77,10 @@ class PipelineContractsTest(unittest.TestCase):
         self.assertEqual(instruction.language_allowlist, ["en"])
         self.assertTrue(instruction.dedup_normalized_text)
         self.assertEqual(instruction.dedup_min_chars, 30)
+        self.assertIn("URBAN", instruction.segments)
+        self.assertEqual(instruction.reporting.quote_count, 12)
+        self.assertEqual(instruction.reporting.max_cooccurrence_pairs, 8)
+        self.assertEqual(instruction.reporting.top_category_limit, 6)
 
     def test_final_rank_score_is_deterministic(self):
         post = SocialPost(
@@ -172,6 +186,127 @@ class PipelineContractsTest(unittest.TestCase):
         self.assertIn("text_excerpt", stats["category_exemplars"]["REL"])
         self.assertIn("Representative post:", report_text)
         self.assertIn("### REL — Reliability", report_text)
+
+    def test_generate_all_emits_consulting_artifacts(self):
+        instruction_yaml = textwrap.dedent(
+            """
+            project:
+              name: "Mobility"
+              description: "Test"
+              objectives:
+                - "Find operational pain points"
+
+            analysis:
+              min_comment_words: 3
+              relevance_keywords: ["wheelchair", "accessibility"]
+              segments:
+                TRANSIT:
+                  name: "Transit"
+                  description: "Transit contexts"
+                  keywords: ["bus", "train"]
+              categories:
+                ACCESS:
+                  name: "Access"
+                  description: "Blocked access"
+                  keywords: ["ramp", "elevator", "accessibility"]
+
+            platforms:
+              reddit:
+                enabled: true
+                subreddits: ["accessibility"]
+                search_queries: ["wheelchair ramp"]
+                sort: "relevance"
+                time_filter: "year"
+                quota:
+                  max_posts_per_query: 10
+                  max_comments_per_post: 10
+
+            reporting:
+              quote_count: 3
+              max_cooccurrence_pairs: 5
+              top_category_limit: 4
+            """
+        )
+
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as handle:
+            handle.write(instruction_yaml)
+            yaml_path = handle.name
+
+        try:
+            instruction = load_instruction(yaml_path)
+        finally:
+            os.unlink(yaml_path)
+
+        posts = filter_posts(
+            [
+                SocialPost(
+                    post_id="1",
+                    platform="youtube",
+                    source_id="vid1",
+                    source_title="Transit story",
+                    author="user1",
+                    text="Wheelchair accessibility on the bus is broken and the ramp fails constantly.",
+                    like_count=8,
+                    metadata={"channel": "Access Channel", "collector_score": 2.0},
+                ),
+                SocialPost(
+                    post_id="2",
+                    platform="reddit",
+                    source_id="thread1",
+                    source_title="Station elevator issue",
+                    author="user2",
+                    text="The train station elevator is out and wheelchair accessibility is awful.",
+                    like_count=3,
+                    metadata={"subreddit": "accessibility", "collector_score": 1.2},
+                ),
+            ],
+            instruction,
+        )
+
+        collector_context = {
+            "youtube": {
+                "channels": [
+                    {
+                        "channel_id": "ch1",
+                        "name": "Access Channel",
+                        "subscribers": 1000,
+                        "handle": "@accesschannel",
+                        "content_style": "vlog",
+                    }
+                ],
+                "videos": [
+                    {
+                        "videoId": "vid1",
+                        "channelName": "Access Channel",
+                        "title": "Transit story",
+                        "viewCount": 1200,
+                        "commentCount": 88,
+                        "publishedAt": "2026-03-01T00:00:00Z",
+                        "collector_video_score": 6.4,
+                        "topic_tags": ["ramp"],
+                    }
+                ],
+                "stats": {"channels_discovered": 1, "videos_selected": 1},
+            }
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            generated = generate_all(posts, instruction, tmpdir, collector_context=collector_context)
+
+            expected_keys = {
+                "all_posts_csv",
+                "coded_posts_csv",
+                "coded_comments_csv",
+                "source_registry_csv",
+                "channel_registry_csv",
+                "video_registry_csv",
+                "summary_stats_json",
+                "summary_report_md",
+                "quotable_excerpts_md",
+            }
+            self.assertTrue(expected_keys.issubset(generated.keys()))
+            for key in expected_keys:
+                self.assertTrue(os.path.exists(generated[key]), key)
 
     def test_language_allowlist_collector_smoke(self):
         instruction_yaml = textwrap.dedent(

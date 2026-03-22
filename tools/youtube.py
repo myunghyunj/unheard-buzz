@@ -136,6 +136,7 @@ def _get_channel_details(youtube, channel_id: str, quota: _QuotaTracker) -> Opti
         "description": snippet.get("description", ""),
         "uploads_id": uploads_id,
         "publishedAt": snippet.get("publishedAt", ""),
+        "custom_url": snippet.get("customUrl", ""),
     }
 
 
@@ -158,15 +159,79 @@ def _search_channels(youtube, query: str, max_results: int, quota: _QuotaTracker
     return channels
 
 
+def _normalize_channel_key(value: str) -> str:
+    value = (value or "").strip().lower()
+    value = value.replace("https://www.youtube.com/", "")
+    value = value.lstrip("@/")
+    return re.sub(r"[^a-z0-9]+", "", value)
+
+
+def _channel_matches_seed(channel: dict, seed: dict) -> bool:
+    targets = {
+        _normalize_channel_key(seed.get("handle", "")),
+        _normalize_channel_key(seed.get("name", "")),
+    }
+    targets.discard("")
+    if not targets:
+        return False
+
+    candidates = {
+        _normalize_channel_key(channel.get("name", "")),
+        _normalize_channel_key(channel.get("custom_url", "")),
+        _normalize_channel_key(channel.get("handle", "")),
+    }
+    candidates.discard("")
+    return bool(targets & candidates)
+
+
+def _merge_channel_seed(channel: dict, seed: dict) -> dict:
+    merged = dict(channel)
+    for key, value in seed.items():
+        if value in ("", None, [], {}):
+            continue
+        merged[key] = value
+    if not merged.get("handle") and seed.get("handle"):
+        merged["handle"] = seed["handle"]
+    if not merged.get("url"):
+        handle = str(merged.get("handle", "")).strip()
+        if handle:
+            if not handle.startswith("@"):
+                handle = "@" + handle.lstrip("/")
+            merged["url"] = f"https://www.youtube.com/{handle}"
+        elif merged.get("custom_url"):
+            merged["url"] = f"https://www.youtube.com/{merged['custom_url']}"
+    return merged
+
+
 def _discover_channels(youtube, instruction: Instruction, quota: _QuotaTracker) -> List[dict]:
     seen = set()
     channels = []
+
+    for seed in instruction.youtube.priority_channels:
+        if len(channels) >= instruction.youtube.max_channels:
+            break
+        query = seed.get("handle") or seed.get("name") or ""
+        if not query:
+            continue
+        found = _search_channels(youtube, query, 5, quota, instruction)
+        matched = None
+        for channel in found:
+            if _channel_matches_seed(channel, seed):
+                matched = _merge_channel_seed(channel, seed)
+                break
+        if matched and matched["channel_id"] not in seen:
+            seen.add(matched["channel_id"])
+            channels.append(matched)
 
     for query in instruction.youtube.search_queries:
         if len(channels) >= instruction.youtube.max_channels:
             break
         found = _search_channels(youtube, query, instruction.youtube.max_channels - len(channels), quota, instruction)
         for ch in found:
+            for seed in instruction.youtube.priority_channels:
+                if _channel_matches_seed(ch, seed):
+                    ch = _merge_channel_seed(ch, seed)
+                    break
             if ch["channel_id"] not in seen:
                 seen.add(ch["channel_id"])
                 channels.append(ch)
@@ -274,6 +339,11 @@ def _score_video(video_info: dict, priority_keywords: List[str]) -> float:
     return round(keyword_score + comment_score + view_score + recency + penalty, 3)
 
 
+def _video_topic_tags(video_info: dict, priority_keywords: List[str]) -> List[str]:
+    text = f"{video_info.get('title', '')} {video_info.get('description', '')}".lower()
+    return [keyword for keyword in priority_keywords if keyword.lower() in text]
+
+
 def _select_all_videos(youtube, channels: List[dict], instruction: Instruction, quota: _QuotaTracker) -> List[dict]:
     selected = []
     for channel in channels:
@@ -303,6 +373,7 @@ def _select_all_videos(youtube, channels: List[dict], instruction: Instruction, 
             v["description"] = s.get("description", v.get("description", ""))
             v["channelName"] = channel["name"]
             v["collector_video_score"] = _score_video(v, instruction.youtube.video_priority_keywords)
+            v["topic_tags"] = _video_topic_tags(v, instruction.youtube.video_priority_keywords)
             scored.append((v["collector_video_score"], v))
 
         scored.sort(key=lambda x: x[0], reverse=True)

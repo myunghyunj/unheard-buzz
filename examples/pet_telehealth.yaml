@@ -1,10 +1,28 @@
 project:
   name: "Telehealth for Pets"
-  description: "Mining pet owners' experiences with veterinary telehealth services and virtual consultations"
+  description: "Voice-of-customer listening brief on veterinary telehealth adoption, diagnosis trust, scheduling friction, and continuity-of-care gaps."
+  objectives:
+    - "Identify what stops pet owners from trusting or reusing tele-vet services."
+    - "Separate urgent-care pain points from chronic-care and convenience use cases."
+    - "Capture moments where people still escalate to ER or in-person care despite starting remotely."
+  target_audiences:
+    - "Pet telehealth startups"
+    - "Veterinary service operators"
+    - "Consumer health and pet-care investors"
+  key_questions:
+    - "Where does tele-vet care feel fast and convenient versus shallow and risky?"
+    - "What complaints cluster around diagnosis confidence, triage, and follow-through?"
+    - "Which segments want reassurance, prescription access, or specialist continuity most?"
+  decision_uses:
+    - "Prioritize product improvements for intake, triage, follow-up, and trust-building."
+    - "Refine messaging around when telehealth is and is not a fit."
 
 analysis:
-  min_comment_words: 15
+  min_comment_words: 10
   include_irrelevant_in_stats: false
+  language_allowlist: ["en"]
+  dedup_normalized_text: true
+  dedup_min_chars: 40
   relevance_keywords:
     - "telehealth"
     - "telemedicine"
@@ -13,53 +31,85 @@ analysis:
     - "pet consultation"
     - "veterinarian"
     - "remote vet"
+    - "vet app"
+    - "urgent care"
+  segments:
+    URGENT:
+      name: "Urgent symptom triage"
+      description: "Owners seeking immediate direction for acute symptoms or possible emergencies."
+      keywords: ["emergency", "urgent", "middle of the night", "er", "poison", "suddenly"]
+    CHRONIC:
+      name: "Chronic management"
+      description: "Ongoing conditions, medication, follow-up, and long-term monitoring."
+      keywords: ["chronic", "follow up", "refill", "ongoing", "allergy", "arthritis", "monitoring"]
+    NEW_OWNER:
+      name: "First-time owner reassurance"
+      description: "New pet parents seeking reassurance, education, or lower-friction access."
+      keywords: ["new puppy", "new kitten", "first time owner", "first-time owner", "not sure if normal"]
   categories:
     AC:
       name: "Access & scheduling"
-      description: "Availability, scheduling, and wait-time issues"
-      keywords: ["access", "appointment", "schedule", "wait", "availability", "booking"]
+      description: "Availability, wait time, appointment booking, and after-hours access issues."
+      keywords: ["appointment", "schedule", "booking", "wait", "availability", "after hours", "weekend"]
     DA:
-      name: "Diagnosis & quality of care"
-      description: "Diagnosis quality and treatment confidence"
-      keywords: ["diagnosis", "misdiagnosis", "quality of care", "treatment plan", "accurate"]
+      name: "Diagnosis confidence"
+      description: "Perceived misdiagnosis, shallow assessment, uncertainty, and fear of missing something serious."
+      keywords: ["diagnosis", "misdiagnosis", "not confident", "couldn't tell", "uncertain", "triage", "serious"]
     CO:
-      name: "Cost & insurance"
-      description: "Consultation fees and insurance issues"
-      keywords: ["cost", "expensive", "price", "fee", "insurance", "coverage"]
+      name: "Cost & coverage"
+      description: "Consultation cost, subscription value, insurance issues, and paying twice."
+      keywords: ["cost", "expensive", "price", "fee", "insurance", "coverage", "pay twice", "subscription"]
     UX:
       name: "User experience & technology"
-      description: "App usability and video call quality"
-      keywords: ["app", "video quality", "lag", "technical", "crash", "interface"]
+      description: "Video quality, app friction, form fatigue, upload issues, and poor communication flow."
+      keywords: ["app", "video", "lag", "crash", "upload", "chat", "interface", "form", "technical"]
+    RX:
+      name: "Prescription & follow-through"
+      description: "Medication access, lab escalation, referral handoff, and continuity problems."
+      keywords: ["prescription", "rx", "medication", "refill", "lab", "referral", "follow up", "pharmacy"]
     SP:
-      name: "Specialist availability"
-      description: "Access to specialist expertise"
-      keywords: ["specialist", "dermatologist", "cardiologist", "expert"]
+      name: "Specialist access"
+      description: "Need for deeper expertise or breed/condition-specific advice."
+      keywords: ["specialist", "expert", "dermatology", "cardiology", "behaviorist", "oncology"]
     WI:
       name: "Wish / improvements"
-      description: "Explicit improvement wishes"
-      keywords: ["wish", "hope", "want", "need", "improve"]
+      description: "Requests for faster reassurance, better continuity, and clearer next steps."
+      keywords: ["wish", "hope", "want", "need", "better", "improve"]
   wish_patterns:
     - "\\bwish\\b"
     - "\\bhope\\b"
     - "\\bwant\\b"
     - "\\bneed\\b"
+    - "\\bbetter\\b"
     - "\\bimprove\\b"
 
 platforms:
   youtube:
-    enabled: false
+    enabled: true
     api_key_env: "YOUTUBE_API_KEY"
-    search_queries: []
-    priority_channels: []
-    video_priority_keywords: []
+    search_queries:
+      - "virtual vet experience"
+      - "online vet consultation review"
+      - "telehealth for pets problems"
+    priority_channels:
+      - name: "Bond Vet"
+        content_style: "brand / educational"
+      - name: "The Kitten Lady"
+        content_style: "owner education"
+    video_priority_keywords:
+      - "telehealth"
+      - "virtual vet"
+      - "review"
+      - "experience"
+      - "urgent care"
     quota:
-      max_channels: 0
-      max_videos_per_channel: 0
-      max_comments_per_video: 0
+      max_channels: 14
+      max_videos_per_channel: 8
+      max_comments_per_video: 120
     transcript:
       enabled: false
       whisper_model: "medium"
-      max_videos: 0
+      max_videos: 10
 
   reddit:
     enabled: true
@@ -67,9 +117,10 @@ platforms:
     search_queries:
       - "telehealth vet"
       - "online vet consultation"
-      - "remote vet appointment"
+      - "virtual vet prescription"
+      - "remote vet emergency"
     sort: "relevance"
-    time_filter: "all"
+    time_filter: "year"
     quota:
       max_posts_per_query: 50
       max_comments_per_post: 100
@@ -78,7 +129,7 @@ platforms:
     enabled: false
     api_key_env: "TWITTER_BEARER_TOKEN"
     search_queries: []
-    search_operators: ""
+    search_operators: "-is:retweet lang:en"
     quota:
       max_results_per_query: 0
       max_total_tweets: 0
@@ -89,6 +140,11 @@ platforms:
     search_queries: []
     quota:
       max_posts: 0
+
+reporting:
+  quote_count: 20
+  max_cooccurrence_pairs: 10
+  top_category_limit: 8
 
 validation:
   enabled: false

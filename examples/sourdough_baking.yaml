@@ -1,84 +1,136 @@
 project:
   name: "Home Sourdough Baking Challenges"
-  description: "Mining comments from home bakers about maintaining starters, fermentation, crust and crumb, equipment, and flavor"
+  description: "Consumer craft-community listening brief on sourdough frustration, failure modes, and desired tools or guidance for better outcomes."
+  objectives:
+    - "Identify the biggest repeated failures in starter care, fermentation, and baking execution."
+    - "Separate beginner confusion from equipment and environment constraints."
+    - "Capture quotable language around inconsistency, wasted time, and ingredient waste."
+  target_audiences:
+    - "Baking education brands"
+    - "Kitchen tool and appliance teams"
+    - "Consumer subscription / creator businesses"
+  key_questions:
+    - "What problems make sourdough feel fragile, intimidating, or too time-consuming?"
+    - "Which frustrations cluster around fermentation knowledge versus equipment limitations?"
+    - "Where do home bakers ask for better feedback loops, diagnostics, or scheduling help?"
+  decision_uses:
+    - "Prioritize product and content ideas for starter management, timing, and bake reliability."
+    - "Improve onboarding and retention for beginner-facing baking products."
 
 analysis:
-  min_comment_words: 15
+  min_comment_words: 10
   include_irrelevant_in_stats: false
+  language_allowlist: ["en"]
+  dedup_normalized_text: true
+  dedup_min_chars: 40
   relevance_keywords:
     - "sourdough"
-    - "sourdough starter"
+    - "starter"
     - "bread baking"
     - "crumb"
     - "crust"
     - "fermentation"
     - "proofing"
+    - "hydration"
+    - "bulk fermentation"
+  segments:
+    BEGINNER:
+      name: "Beginner"
+      description: "Early-stage bakers learning process and terminology."
+      keywords: ["new to sourdough", "beginner", "first loaf", "first starter", "just started"]
+    COLD:
+      name: "Cool / variable environment"
+      description: "Temperature variability and climate-driven fermentation issues."
+      keywords: ["cold kitchen", "winter", "temperature", "cold house", "room temp"]
+    HIGHHYD:
+      name: "High hydration / advanced shaping"
+      description: "More advanced dough handling and structure challenges."
+      keywords: ["high hydration", "80%", "stretch and fold", "coil fold", "shaping"]
   categories:
     ST:
       name: "Starter maintenance"
-      description: "Starter feeding, storage, and recovery"
-      keywords: ["starter", "feed", "feeding", "discard", "refresh"]
+      description: "Feeding cadence, storage, activity, and recovery of starter."
+      keywords: ["starter", "feed", "feeding", "discard", "hungry", "inactive", "weak starter"]
     FT:
       name: "Fermentation & proofing"
-      description: "Bulk fermentation, proofing, and timing"
-      keywords: ["fermentation", "proof", "proofing", "bulk", "rise", "overproof", "underproof"]
+      description: "Bulk fermentation timing, under/overproofing, and climate-sensitive uncertainty."
+      keywords: ["fermentation", "proof", "proofing", "bulk", "rise", "overproof", "underproof", "timing"]
     CR:
       name: "Crumb & crust structure"
-      description: "Texture, crust formation, and loaf structure"
-      keywords: ["crumb", "crust", "open crumb", "dense", "ear", "score", "bloom"]
+      description: "Dense crumb, gummy interior, poor oven spring, and crust issues."
+      keywords: ["crumb", "crust", "dense", "gummy", "open crumb", "oven spring", "ear", "score"]
     EQ:
       name: "Equipment & oven performance"
-      description: "Oven, Dutch oven, steam, and temperature control"
-      keywords: ["oven", "Dutch oven", "steam", "temperature", "baking stone"]
+      description: "Dutch oven, steam, temperature control, and tool limitations."
+      keywords: ["oven", "dutch oven", "steam", "temperature", "baking stone", "thermometer", "scale"]
+    SC:
+      name: "Schedule & workflow friction"
+      description: "Time burden, planning around life, and difficulty fitting baking into routines."
+      keywords: ["schedule", "time", "overnight", "workday", "routine", "timing", "all day"]
     FL:
-      name: "Flavor & taste"
-      description: "Sourness, aroma, and flour-driven flavor"
-      keywords: ["flavor", "taste", "sour", "sweet", "hydration", "flour"]
+      name: "Flour, hydration & flavor"
+      description: "Ingredient choice, hydration balance, sourness, and taste consistency."
+      keywords: ["flour", "hydration", "taste", "flavor", "sour", "whole wheat", "rye"]
     WI:
       name: "Wish / improvements"
-      description: "Explicit improvement wishes"
-      keywords: ["wish", "hope", "want", "need", "improve"]
+      description: "Requests for more predictable guidance, tools, or diagnosis."
+      keywords: ["wish", "hope", "want", "need", "better", "improve"]
   wish_patterns:
     - "\\bwish\\b"
     - "\\bhope\\b"
     - "\\bwant\\b"
     - "\\bneed\\b"
+    - "\\bbetter\\b"
     - "\\bimprove\\b"
 
 platforms:
   youtube:
-    enabled: false
+    enabled: true
     api_key_env: "YOUTUBE_API_KEY"
-    search_queries: []
-    priority_channels: []
-    video_priority_keywords: []
+    search_queries:
+      - "sourdough starter problems"
+      - "why is my sourdough dense"
+      - "bulk fermentation sourdough mistakes"
+    priority_channels:
+      - name: "The Bread Code"
+        content_style: "technical baking"
+      - name: "Foodgeek"
+        content_style: "experiment-led"
+    video_priority_keywords:
+      - "sourdough"
+      - "starter"
+      - "mistakes"
+      - "why"
+      - "crumb"
+      - "proofing"
     quota:
-      max_channels: 0
-      max_videos_per_channel: 0
-      max_comments_per_video: 0
+      max_channels: 14
+      max_videos_per_channel: 8
+      max_comments_per_video: 120
     transcript:
       enabled: false
       whisper_model: "medium"
-      max_videos: 0
+      max_videos: 10
 
   reddit:
     enabled: true
     subreddits: ["sourdough", "Breadit", "baking", "AskBakers"]
     search_queries:
       - "sourdough starter problems"
-      - "bulk fermentation sourdough"
-      - "home oven sourdough"
+      - "bulk fermentation issue"
+      - "dense sourdough crumb"
+      - "sourdough timing work schedule"
     sort: "relevance"
-    time_filter: "all"
+    time_filter: "year"
     quota:
-      max_posts_per_query: 50
-      max_comments_per_post: 100
+      max_posts_per_query: 60
+      max_comments_per_post: 120
 
   twitter:
     enabled: false
     api_key_env: "TWITTER_BEARER_TOKEN"
     search_queries: []
-    search_operators: ""
+    search_operators: "-is:retweet lang:en"
     quota:
       max_results_per_query: 0
       max_total_tweets: 0
@@ -89,6 +141,11 @@ platforms:
     search_queries: []
     quota:
       max_posts: 0
+
+reporting:
+  quote_count: 20
+  max_cooccurrence_pairs: 10
+  top_category_limit: 8
 
 validation:
   enabled: false

@@ -1,41 +1,135 @@
 project:
   name: "Amputee Prosthetic Unmet Needs"
-  description: "Mining patient-voice data across social platforms to identify unmet prosthetic needs"
+  description: "Consulting-grade social listening brief on prosthetic pain points, adaptation friction, and product opportunity areas across amputee communities."
+  objectives:
+    - "Rank the most frequent unmet prosthetic-user needs in public conversation."
+    - "Separate lower-limb, upper-limb, bilateral, and early-rehab voices where possible."
+    - "Collect quotable language that shows where current devices, clinics, and care pathways fail."
+  target_audiences:
+    - "Assistive-tech product teams"
+    - "Prosthetics clinics and service operators"
+    - "Healthcare founders, investors, and insights teams"
+  key_questions:
+    - "Which prosthetic frustrations recur most consistently across high-volume patient communities?"
+    - "Which complaints are mainly device problems versus access, service, and training problems?"
+    - "Where do users express concrete upgrade wishes, workaround behavior, or abandonment risk?"
+    - "Which concerns appear disproportionately in upper-limb versus lower-limb conversations?"
+  decision_uses:
+    - "Prioritize roadmap themes for sockets, suspension, liners, durability, and control."
+    - "Identify service-model gaps around fitting, follow-up, education, and reimbursement."
+    - "Build sharper interview guides for amputees segmented by limb type and journey stage."
 
 analysis:
-  min_comment_words: 15
+  min_comment_words: 12
   include_irrelevant_in_stats: false
+  language_allowlist: ["en"]
+  dedup_normalized_text: true
+  dedup_min_chars: 40
   relevance_keywords:
     - "prosthetic"
     - "prosthesis"
     - "amputee"
     - "amputation"
+    - "residual limb"
     - "socket"
     - "liner"
+    - "pin lock"
+    - "suction socket"
+    - "vacuum suspension"
     - "phantom pain"
     - "myoelectric"
+    - "running blade"
+    - "prosthetist"
     - "osseointegration"
+  segments:
+    LL:
+      name: "Lower-limb amputee"
+      description: "Posts signaling below-knee, above-knee, foot, knee, or walking prosthesis contexts."
+      keywords: ["bk", "bka", "below knee", "ak", "aka", "above knee", "leg", "foot", "knee", "running blade", "ankle"]
+    UL:
+      name: "Upper-limb amputee"
+      description: "Posts about arms, hands, myoelectric control, grasping, and upper-limb prostheses."
+      keywords: ["upper limb", "arm", "hand", "transradial", "transhumeral", "myoelectric", "grip", "grasp", "terminal device"]
+    BI:
+      name: "Bilateral"
+      description: "Posts where bilateral amputation or dual-device use is explicit."
+      keywords: ["bilateral", "both legs", "both arms", "double amputee", "double above knee", "double below knee"]
+    ER:
+      name: "Early rehab / new amputee"
+      description: "Posts from new amputees, people in first fitting cycles, or immediate recovery."
+      keywords: ["new amputee", "first socket", "test socket", "recent amputation", "just got my prosthetic", "first leg"]
   categories:
     SF:
       name: "Socket fit / volume"
-      description: "Volume fluctuation, loose or tight socket, sock ply management"
-      keywords: ["socket", "volume", "loose", "tight", "pistoning", "fitting", "alignment"]
+      description: "Loose or tight socket, volume fluctuation, pistoning, alignment, and fit instability."
+      keywords: ["socket", "fit", "fitting", "loose", "tight", "pistoning", "volume", "sock ply", "alignment", "check socket", "residual limb"]
+      opportunity_signals:
+        - "Users describe daily sock changes, inconsistent fit, or inability to trust the socket throughout the day."
+      example_phrases:
+        - "It feels good for five minutes and then gets loose."
+        - "I'm on another test socket already."
+    DD:
+      name: "Don / doff & suspension friction"
+      description: "Problems putting the device on or off, locking in, liner handling, and suspension systems."
+      keywords: ["don", "doff", "put on", "take off", "pin lock", "liner", "sleeve", "click in", "lock in", "vacuum", "suction", "roll on"]
+      opportunity_signals:
+        - "Users frame basic wearing steps as exhausting, time-consuming, or unpredictable."
+    WD:
+      name: "Weight / durability"
+      description: "Heavy devices, breakage, fragile parts, battery complaints, and maintenance burden."
+      keywords: ["heavy", "weight", "durable", "durability", "broken", "broke", "cracked", "carbon fiber", "maintenance", "battery", "charging"]
+      opportunity_signals:
+        - "Users mention devices failing in work, sport, or daily-life conditions."
+    AC:
+      name: "Access / cost / reimbursement"
+      description: "Insurance, clinic access, appointment delays, travel burden, and affordability."
+      keywords: ["cost", "expensive", "insurance", "coverage", "copay", "afford", "clinic", "appointment", "approval", "replacement", "waitlist", "travel"]
+      opportunity_signals:
+        - "Pain is intensified by reimbursement delays, clinic logistics, or replacement constraints."
+    MG:
+      name: "Mobility / gait / falls"
+      description: "Walking confidence, balance, stairs, uneven terrain, tripping, and gait instability."
+      keywords: ["walk", "walking", "gait", "balance", "stairs", "fall", "fell", "stumble", "uneven ground", "mobility", "run"]
+    AL:
+      name: "Activity limitation"
+      description: "Daily-life or identity limitations involving work, exercise, hobbies, driving, showering, or sleep."
+      keywords: ["can't", "cannot", "hard to", "work", "workout", "exercise", "drive", "sleep", "shower", "sports", "daily life"]
     PM:
       name: "Pain (mechanical)"
-      description: "Socket pressure, bone pain, skin-socket interface pain"
-      keywords: ["pressure point", "bone pain", "sore", "painful", "hurts", "rubbing"]
+      description: "Pressure, rubbing, bone pain, distal-end pain, and interface pain driven by the device."
+      keywords: ["pain", "painful", "pressure point", "bone pain", "sore", "hurts", "rubbing", "pinch", "bruise", "distal end"]
     PP:
       name: "Phantom pain"
-      description: "Phantom limb pain, phantom sensation, neuroma"
-      keywords: ["phantom pain", "phantom limb", "neuroma", "nerve pain", "tingling"]
+      description: "Phantom limb pain, neuroma, nerve zaps, and phantom sensation burdens."
+      keywords: ["phantom pain", "phantom limb", "neuroma", "nerve pain", "zapping", "tingling", "phantom sensation"]
+    SK:
+      name: "Skin / hygiene"
+      description: "Rashes, blisters, odor, wound care, skin breakdown, and hygiene management."
+      keywords: ["skin", "rash", "blister", "odor", "hygiene", "infection", "wound", "chafing", "skin breakdown"]
     HS:
       name: "Heat / sweat"
-      description: "Thermal discomfort, perspiration in liner or socket"
-      keywords: ["sweat", "sweating", "hot", "heat", "moisture", "overheating"]
+      description: "Heat, moisture, sweating, liner discomfort, and seasonal thermal burden."
+      keywords: ["sweat", "sweating", "hot", "heat", "humidity", "moisture", "overheating", "summer"]
+    SV:
+      name: "Service / training"
+      description: "Prosthetist quality, education, follow-up support, rehab coaching, and fit iteration quality."
+      keywords: ["prosthetist", "pt", "training", "adjustment", "education", "support", "follow-up", "follow up", "appointment", "therapist"]
+    EP:
+      name: "Emotional / psychological"
+      description: "Confidence loss, grief, frustration, embarrassment, depression, and adaptation strain."
+      keywords: ["frustrated", "frustrating", "confidence", "embarrassed", "depressed", "grief", "anxiety", "mental", "overwhelmed"]
+    CT:
+      name: "Control (upper limb)"
+      description: "Upper-limb device control, grip reliability, signal quality, and intuitive use."
+      keywords: ["control", "grip", "grasp", "open hand", "close hand", "myoelectric", "signal", "emg", "pattern recognition"]
+    SF_UL:
+      name: "Sensory feedback"
+      description: "Missing touch, haptics, proprioception, or feedback in upper-limb prosthesis use."
+      keywords: ["sensory feedback", "feedback", "feel", "touch", "haptic", "vibration", "proprioception"]
     WI:
       name: "Wish / future desire"
-      description: "Explicit improvement wishes"
-      keywords: ["wish", "hope", "want", "dream", "if only", "should be", "improve"]
+      description: "Direct statements of wanting, needing, hoping for, or imagining a better solution."
+      keywords: ["wish", "hope", "want", "need", "if only", "would be nice", "should be", "improve", "better prosthetic"]
   wish_patterns:
     - "\\bwish\\b"
     - "\\bhope\\b"
@@ -45,50 +139,91 @@ analysis:
     - "\\bwould be nice\\b"
     - "\\bshould be\\b"
     - "\\bimprove\\b"
+    - "\\bbetter prosthetic\\b"
 
 platforms:
   youtube:
     enabled: true
     api_key_env: "YOUTUBE_API_KEY"
     search_queries:
-      - "amputee daily life prosthetic"
-      - "prosthetic socket problems"
+      - "amputee prosthetic problems"
+      - "prosthetic socket fit issues"
+      - "phantom pain amputee"
+      - "myoelectric arm honest review"
+      - "prosthetic leg daily life struggles"
     priority_channels:
       - handle: "@FootlessJo"
         name: "Footless Jo"
+        content_style: "narrative vlog"
+        limb_level: "lower_limb"
+        rationale: "Large, emotionally rich amputee audience with high comment volume."
+      - handle: "@StephaninasAmputeeAdventures"
+        name: "Stephanina's Amputee Adventures"
+        content_style: "education + lived experience"
+        limb_level: "lower_limb"
+        rationale: "Frequent prosthetic education threads with detailed patient comments."
+      - handle: "@tilly.lockey"
+        name: "Tilly Lockey"
+        content_style: "upper-limb lifestyle + advocacy"
+        limb_level: "upper_limb"
+        device_type: "myoelectric"
+        rationale: "Useful upper-limb signal on control, dexterity, and everyday friction."
+      - handle: "@PegLegMeg"
+        name: "Peg Leg Meg"
+        content_style: "daily life"
+        limb_level: "lower_limb"
+      - handle: "@bremerprosthetics"
+        name: "Bremer Prosthetics"
+        content_style: "clinical education"
+        rationale: "Comment sections often contain fit and service complaints from active patients."
     video_priority_keywords:
       - "socket"
+      - "fit"
       - "pain"
+      - "phantom"
       - "review"
+      - "daily life"
+      - "prosthetic leg"
+      - "prosthetic arm"
+      - "myoelectric"
+      - "amputee advice"
     quota:
-      max_channels: 10
-      max_videos_per_channel: 6
-      max_comments_per_video: 120
+      max_channels: 25
+      max_videos_per_channel: 10
+      max_comments_per_video: 180
     transcript:
       enabled: false
       whisper_model: "medium"
       max_videos: 20
+      term_corrections:
+        "amputee life": "amputee"
+        "prosthetic leg": "prosthetic"
 
   reddit:
     enabled: true
-    subreddits: ["amputee", "prosthetics", "Osseointegration"]
+    subreddits: ["amputee", "prosthetics", "disability", "medical", "Osseointegration"]
     search_queries:
       - "prosthetic socket problems"
       - "phantom pain treatment"
+      - "prosthetist not listening"
+      - "pin lock vs suction socket"
+      - "myoelectric arm control issues"
     sort: "relevance"
     time_filter: "all"
     quota:
-      max_posts_per_query: 40
-      max_comments_per_post: 80
+      max_posts_per_query: 60
+      max_comments_per_post: 120
 
   twitter:
     enabled: false
     api_key_env: "TWITTER_BEARER_TOKEN"
-    search_queries: []
-    search_operators: ""
+    search_queries:
+      - "prosthetic socket hurts"
+      - "\"phantom pain\" amputee"
+    search_operators: "-is:retweet lang:en"
     quota:
-      max_results_per_query: 0
-      max_total_tweets: 0
+      max_results_per_query: 50
+      max_total_tweets: 200
 
   linkedin:
     enabled: false
@@ -97,6 +232,32 @@ platforms:
     quota:
       max_posts: 0
 
+reporting:
+  quote_count: 30
+  max_cooccurrence_pairs: 15
+  top_category_limit: 12
+
 validation:
-  enabled: false
-  references: []
+  enabled: true
+  references:
+    - name: "Turner & McGregor 2020"
+      title: "Socket fit and thermal burden as dominant barriers in lower-limb prosthesis experience"
+      key_findings:
+        SF: "Socket fit frequently ranks as a top functional determinant."
+        PM: "Mechanical pain is a major barrier to sustained prosthesis use."
+        HS: "Heat and sweat are common contributors to dissatisfaction."
+      top_categories: ["SF", "PM", "HS"]
+    - name: "Cordella et al. 2016"
+      title: "Upper-limb prosthesis user requirements review"
+      key_findings:
+        CT: "Control and grasp reliability are central upper-limb requirements."
+        SF_UL: "Sensory feedback remains a major unmet need."
+        WD: "Weight and durability remain recurring complaints."
+      top_categories: ["CT", "SF_UL", "WD"]
+    - name: "Manz et al. 2022"
+      title: "Systematic review of lower-limb prosthetic needs and barriers"
+      key_findings:
+        SF: "Fit and comfort dominate lower-limb need rankings."
+        MG: "Mobility and gait outcomes are core user priorities."
+        AC: "Cost and access constraints are persistent."
+      top_categories: ["SF", "MG", "AC"]

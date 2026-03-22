@@ -3,7 +3,7 @@
 This file is for Claude Code and similar chat-first coding agents.
 Use it as the runtime playbook for operating `unheard-buzz`.
 
-Deep technical review material lives in `ARCHITECTURE.md`.
+Deep technical review material lives in `docs/ARCHITECTURE.md`.
 Open that file when you need internals, debugging details, data flow, or extension guidance.
 
 ## Mission
@@ -162,9 +162,9 @@ When summarizing for the user:
 - `input/linkedin_export.csv` — expected LinkedIn CSV import path
 - `examples/*.yaml` — worked example instructions for multiple markets
 
-## When to open ARCHITECTURE.md
+## When to open docs/ARCHITECTURE.md
 
-Use `ARCHITECTURE.md` for:
+Use `docs/ARCHITECTURE.md` for:
 - module-by-module responsibilities
 - data flow and checkpoint behavior
 - SocialPost schema and dataclass details
