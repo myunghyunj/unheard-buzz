@@ -1,9 +1,9 @@
-"""
-Cross-platform report generation.
+"""Cross-platform report generation.
 
-v2 changes:
-- stats default to relevant posts only
-- author anonymization no longer mutates source objects in-place
+v3 additions:
+- final rank score is used for quote selection
+- category exemplars are included in summary stats and summary reports
+- export anonymization remains non-mutating
 """
 
 import csv
@@ -15,7 +15,13 @@ from typing import Dict, List, Tuple
 from copy import deepcopy
 
 from config import Instruction, SocialPost
-from analyzer import analyze_by_platform, get_cross_platform_insights, posts_for_stats
+from analyzer import (
+    analyze_by_platform,
+    compute_final_rank_score,
+    get_cross_platform_insights,
+    posts_for_stats,
+    representative_posts_by_category,
+)
 
 
 def clone_posts(posts: List[SocialPost]) -> List[SocialPost]:
@@ -80,6 +86,19 @@ def generate_summary_stats(posts: List[SocialPost], instruction: Instruction, ou
         row["total"] = global_cats.get(cat, 0)
         platform_table[cat] = row
 
+    exemplar_map = representative_posts_by_category(posts, instruction, per_category=1)
+    category_exemplars = {}
+    for cat, items in exemplar_map.items():
+        if not items:
+            continue
+        top = items[0]
+        category_exemplars[cat] = {
+            "post_id": top.post_id,
+            "platform": top.platform,
+            "score": compute_final_rank_score(top),
+            "text_preview": top.text[:180] + ("..." if len(top.text) > 180 else ""),
+        }
+
     stats = {
         "project_name": instruction.project_name,
         "generated_at": datetime.now().isoformat(),
@@ -101,6 +120,7 @@ def generate_summary_stats(posts: List[SocialPost], instruction: Instruction, ou
         "platform_breakdown": platform_table,
         "co_occurrences": insights["co_occurrences"],
         "platform_unique_emphases": insights["platform_unique_emphases"],
+        "category_exemplars": category_exemplars,
     }
 
     filepath = os.path.join(output_dir, "summary_stats.json")
@@ -146,6 +166,19 @@ def generate_summary_report(stats: dict, instruction: Instruction, output_dir: s
         cat_name = instruction.categories.get(code, {}).get("name", code)
         lines.append(f"| {rank} | {code} | {cat_name} | {count} |")
     lines.append("")
+
+    exemplars = stats.get("category_exemplars", {})
+    if exemplars:
+        lines.append("## Category Exemplars")
+        lines.append("")
+        for code, info in exemplars.items():
+            cat_name = instruction.categories.get(code, {}).get("name", code)
+            lines.append(f"### {code} — {cat_name}")
+            lines.append("")
+            lines.append(f"- Platform: **{info['platform']}**")
+            lines.append(f"- Final score: **{info['score']}**")
+            lines.append(f"- Quote preview: {info['text_preview']}")
+            lines.append("")
 
     lines.append("## Platform Breakdown")
     lines.append("")
@@ -238,14 +271,7 @@ def select_quotable_excerpts(posts: List[SocialPost], instruction: Instruction, 
     for post in posts:
         if not post.is_relevant:
             continue
-        score = 2.0
-        if post.has_wish:
-            score += 3.0
-        score += len(post.categories) * 1.0
-        score += min(post.like_count / 10.0, 5.0)
-        if 25 <= post.word_count <= 150:
-            score += 1.0
-        score += min(post.relevance_score, 1.0)
+        score = compute_final_rank_score(post)
         scored.append((score, post))
 
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -271,7 +297,10 @@ def select_quotable_excerpts(posts: List[SocialPost], instruction: Instruction, 
             "has_wish": post.has_wish,
             "like_count": post.like_count,
             "relevance_score": round(post.relevance_score, 3),
-            "score": round(score, 1),
+            "collector_score": round(float(post.metadata.get("collector_score", 0.0)), 3)
+            if isinstance(post.metadata, dict)
+            else 0.0,
+            "final_rank_score": round(score, 4),
         })
 
     return excerpts
@@ -284,10 +313,7 @@ def generate_excerpts_md(excerpts: List[dict], instruction: Instruction, output_
     lines: List[str] = []
     lines.append(f"# {instruction.project_name} — Quotable Excerpts")
     lines.append("")
-    lines.append(
-        f"Top {len(excerpts)} quotes selected across all platforms, "
-        "ranked by relevance and expressiveness."
-    )
+    lines.append(f"Top {len(excerpts)} quotes selected across all platforms, ranked by final rank score.")
     lines.append("")
 
     for i, exc in enumerate(excerpts, 1):
@@ -305,10 +331,9 @@ def generate_excerpts_md(excerpts: List[dict], instruction: Instruction, output_
         if source:
             lines.append(f"*Source: {source}*  ")
         lines.append(
-            f"*Likes: {exc['like_count']} | "
-            f"Relevance score: {exc['relevance_score']} | "
-            f"Categories: {', '.join(exc['category_names']) or 'none'} | "
-            f"Score: {exc['score']}*"
+            f"*Final score: {exc['final_rank_score']} | Collector score: {exc['collector_score']} | "
+            f"Relevance score: {exc['relevance_score']} | Likes: {exc['like_count']} | "
+            f"Categories: {', '.join(exc['category_names']) or 'none'}*"
         )
         lines.append("")
 

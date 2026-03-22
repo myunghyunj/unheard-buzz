@@ -235,6 +235,7 @@ class SocialPost:
     relevance_score: float = 0.0
     categories: List[str] = field(default_factory=list)
     category_scores: Dict[str, float] = field(default_factory=dict)
+    final_rank_score: float = 0.0
     has_wish: bool = False
     word_count: int = 0
     analysis_complete: bool = False
@@ -256,6 +257,7 @@ class SocialPost:
             "relevance_score": self.relevance_score,
             "categories": "|".join(self.categories),
             "category_scores": json_dumps_safe(self.category_scores),
+            "final_rank_score": self.final_rank_score,
             "has_wish": self.has_wish,
             "word_count": self.word_count,
             "analysis_complete": self.analysis_complete,
@@ -267,7 +269,7 @@ class SocialPost:
             "post_id", "platform", "source_id", "source_title", "author",
             "text", "like_count", "is_reply", "timestamp", "url",
             "is_relevant", "relevance_score", "categories", "category_scores",
-            "has_wish", "word_count", "analysis_complete",
+            "final_rank_score", "has_wish", "word_count", "analysis_complete",
         ]
 
 

@@ -1,10 +1,9 @@
-"""
-Unified cross-platform analysis engine.
+"""Unified cross-platform analysis engine.
 
-v2 changes:
-- explicit confidence scoring for relevance and categories
-- analysis completion marker on each post
-- category assignment gated by relevance by default
+v3 additions:
+- explicit final ranking layer
+- representative-post helpers for reporting
+- category assignment still gated by relevance by default
 """
 
 import re
@@ -44,6 +43,23 @@ def _score_from_hits(hit_count: int, keyword_count: int) -> float:
         return 0.0
     normalized = hit_count / min(keyword_count, 3)
     return round(min(1.0, normalized), 3)
+
+
+def compute_final_rank_score(post: SocialPost) -> float:
+    raw_collector = float(post.metadata.get("collector_score", 0.0) or 0.0)
+    collector_score = min(1.0, max(0.0, raw_collector) / 8.0)
+    relevance_score = min(max(post.relevance_score, 0.0), 1.0)
+    category_score = max(post.category_scores.values()) if post.category_scores else 0.0
+    wish_bonus = 0.15 if post.has_wish else 0.0
+    engagement_bonus = min(post.like_count / 50.0, 0.25)
+    score = (
+        0.35 * collector_score
+        + 0.40 * relevance_score
+        + 0.25 * category_score
+        + wish_bonus
+        + engagement_bonus
+    )
+    return round(score, 4)
 
 
 def filter_posts(posts: List[SocialPost], instruction: Instruction) -> List[SocialPost]:
@@ -112,6 +128,7 @@ def filter_posts(posts: List[SocialPost], instruction: Instruction) -> List[Soci
 
         post.category_scores = category_scores
         post.categories = assigned_categories
+        post.final_rank_score = compute_final_rank_score(post)
         post.analysis_complete = True
         filtered.append(post)
 
@@ -123,6 +140,33 @@ def posts_for_stats(posts: List[SocialPost], instruction: Instruction) -> List[S
     if getattr(instruction, "include_irrelevant_in_stats", False):
         return posts
     return [p for p in posts if p.is_relevant]
+
+
+def representative_posts_by_category(
+    posts: List[SocialPost],
+    instruction: Instruction,
+    per_category: int = 1,
+) -> Dict[str, List[SocialPost]]:
+    scoped = posts_for_stats(posts, instruction)
+    buckets: Dict[str, List[SocialPost]] = defaultdict(list)
+
+    for post in scoped:
+        for cat in post.categories:
+            buckets[cat].append(post)
+
+    selected: Dict[str, List[SocialPost]] = {}
+    for cat, items in buckets.items():
+        ranked = sorted(
+            items,
+            key=lambda post: (
+                compute_final_rank_score(post),
+                post.relevance_score,
+                post.like_count,
+            ),
+            reverse=True,
+        )
+        selected[cat] = ranked[:per_category]
+    return selected
 
 
 def analyze_by_platform(posts: List[SocialPost]) -> Dict[str, dict]:

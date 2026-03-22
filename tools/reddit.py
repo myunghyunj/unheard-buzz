@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import requests
 
 from config import Instruction, SocialPost
+from language import guess_language, language_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -146,23 +147,6 @@ def _normalize_text_signature(text: str) -> str:
     return text.strip()
 
 
-def _guess_language(text: str) -> str:
-    sample = text[:500]
-    if re.search(r"[가-힣]", sample):
-        return "ko"
-    if re.search(r"[\u3040-\u30ff]", sample):
-        return "ja"
-    if re.search(r"[\u4e00-\u9fff]", sample):
-        return "zh"
-    if re.search(r"[\u0400-\u04FF]", sample):
-        return "ru"
-
-    lower = sample.lower()
-    if any(tok in lower for tok in (" the ", " and ", " is ", " are ", " with ")):
-        return "en"
-    return "unknown"
-
-
 def _collector_score(post: SocialPost, instruction: Instruction) -> float:
     sig = _normalize_text_signature(post.text)
     keyword_hits = 0
@@ -175,13 +159,6 @@ def _collector_score(post: SocialPost, instruction: Instruction) -> float:
     reply_bonus = 0.5 if post.is_reply else 1.0
     score = keyword_hits * 1.5 + length_bonus + engagement + reply_bonus
     return round(score, 3)
-
-
-def _language_allowed(lang: str, instruction: Instruction) -> bool:
-    allow = {x.lower() for x in getattr(instruction, "language_allowlist", [])}
-    if not allow:
-        return True
-    return lang in allow
 
 
 def _dedup_posts(posts: List[SocialPost], instruction: Instruction) -> Tuple[List[SocialPost], int]:
@@ -290,8 +267,8 @@ def run_reddit(instruction: Instruction) -> dict:
             metadata={"subreddit": subreddit},
         )
 
-        lang = _guess_language(post_obj.text)
-        if not _language_allowed(lang, instruction):
+        lang = guess_language(post_obj.text)
+        if not language_allowed(lang, instruction.language_allowlist):
             stats["lang_filtered"] += 1
         else:
             post_obj.metadata["language_guess"] = lang
@@ -303,8 +280,8 @@ def run_reddit(instruction: Instruction) -> dict:
             try:
                 comments = _fetch_comments(subreddit, pid, title, cfg.max_comments_per_post)
                 for comment in comments:
-                    lang = _guess_language(comment.text)
-                    if not _language_allowed(lang, instruction):
+                    lang = guess_language(comment.text)
+                    if not language_allowed(lang, instruction.language_allowlist):
                         stats["lang_filtered"] += 1
                         continue
                     comment.metadata["language_guess"] = lang

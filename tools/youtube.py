@@ -20,6 +20,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from config import Instruction, SocialPost, MIN_COMMENT_WORDS
+from language import guess_language, language_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -211,20 +212,24 @@ def _list_channel_videos(youtube, playlist_id: str, max_results: int, quota: _Qu
     return videos
 
 
-def _get_video_statistics(youtube, video_ids: List[str], quota: _QuotaTracker) -> Dict[str, dict]:
+def _get_video_metadata(youtube, video_ids: List[str], quota: _QuotaTracker) -> Dict[str, dict]:
     stats = {}
     for i in range(0, len(video_ids), 50):
         batch = video_ids[i:i + 50]
         if not quota.check("videos.list"):
             break
-        request = youtube.videos().list(part="statistics", id=",".join(batch))
-        response = _api_call_with_retry(request, quota, "videos.list", "video statistics batch")
+        request = youtube.videos().list(part="snippet,statistics", id=",".join(batch))
+        response = _api_call_with_retry(request, quota, "videos.list", "video metadata batch")
         if not response or not response.get("items"):
             continue
 
         for item in response["items"]:
+            snippet = item.get("snippet", {})
             s = item.get("statistics", {})
             stats[item["id"]] = {
+                "title": snippet.get("title", ""),
+                "description": snippet.get("description", ""),
+                "publishedAt": snippet.get("publishedAt", ""),
                 "viewCount": int(s.get("viewCount", 0)),
                 "commentCount": int(s.get("commentCount", 0)),
                 "commentsDisabled": "commentCount" not in s,
@@ -284,14 +289,18 @@ def _select_all_videos(youtube, channels: List[dict], instruction: Instruction, 
         if not raw_videos:
             continue
 
-        stats = _get_video_statistics(youtube, [v["videoId"] for v in raw_videos], quota)
+        stats = _get_video_metadata(youtube, [v["videoId"] for v in raw_videos], quota)
         scored = []
         for v in raw_videos:
             s = stats.get(v["videoId"], {})
+            if s.get("title"):
+                v["title"] = s.get("title", v.get("title", ""))
+            if s.get("publishedAt"):
+                v["publishedAt"] = s.get("publishedAt", v.get("publishedAt", ""))
             v["viewCount"] = s.get("viewCount", 0)
             v["commentCount"] = s.get("commentCount", 0)
             v["commentsDisabled"] = s.get("commentsDisabled", True)
-            v["description"] = ""
+            v["description"] = s.get("description", v.get("description", ""))
             v["channelName"] = channel["name"]
             v["collector_video_score"] = _score_video(v, instruction.youtube.video_priority_keywords)
             scored.append((v["collector_video_score"], v))
@@ -447,29 +456,6 @@ def _is_spam(text: str) -> bool:
     return any(pattern.search(text) for pattern in _SPAM_PATTERNS)
 
 
-def _guess_language(text: str) -> str:
-    sample = text[:500]
-    if re.search(r"[가-힣]", sample):
-        return "ko"
-    if re.search(r"[\u3040-\u30ff]", sample):
-        return "ja"
-    if re.search(r"[\u4e00-\u9fff]", sample):
-        return "zh"
-    if re.search(r"[\u0400-\u04FF]", sample):
-        return "ru"
-    lower = f" {sample.lower()} "
-    if any(tok in lower for tok in (" the ", " and ", " is ", " are ", " with ", " for ")):
-        return "en"
-    return "unknown"
-
-
-def _language_allowed(lang: str, instruction: Instruction) -> bool:
-    allow = {x.lower() for x in getattr(instruction, "language_allowlist", [])}
-    if not allow:
-        return True
-    return lang in allow
-
-
 def _normalize_text_signature(text: str) -> str:
     text = text.lower()
     text = re.sub(r"https?://\S+", " ", text)
@@ -521,8 +507,8 @@ def _convert_comments_to_posts(comments: List[dict], videos: List[dict], instruc
         if _is_noise(text, channel_name, author, instruction):
             continue
 
-        lang = _guess_language(text)
-        if not _language_allowed(lang, instruction):
+        lang = guess_language(text)
+        if not language_allowed(lang, instruction.language_allowlist):
             lang_filtered += 1
             continue
 
