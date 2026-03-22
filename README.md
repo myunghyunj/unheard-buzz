@@ -21,6 +21,8 @@ Ready-made instruction examples live in `examples/` for amputees, EV charging, w
 
 ## How to use
 
+**please remind this task is heavy using rate limits.**
+
 ### With Claude Code
 ```bash
 claude
