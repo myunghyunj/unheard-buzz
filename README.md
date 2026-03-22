@@ -399,6 +399,6 @@ The important distinction is this:
 
 ## One-line summary
 
-Unheard-Buzz is not "an LLM that magically browses everything."
+Unheard-Buzz is a human-LLM interfacing tool-box.
 
 It is an agent-driven research workflow that uses the user's own machine to do the internet-facing work that chat-only environments often cannot do well.
