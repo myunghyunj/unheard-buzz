@@ -98,7 +98,7 @@ If your usual workflow includes `/init`, you can still run it, but it is optiona
 codex
 ```
 
-Then tell Codex what you want to research.
+Then tell Codex what you want to research. **cf. I prefer using Codex.**
 
 This repo already includes `AGENTS.md`, so Codex can pick up the repo instructions without extra setup.
 
