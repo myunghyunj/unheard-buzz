@@ -1,0 +1,96 @@
+project:
+  name: "Indie Game Developer Publishing Challenges"
+  description: "Mining comments from indie game developers about platform policies, revenue share, marketing, tools, and player feedback"
+
+analysis:
+  min_comment_words: 15
+  include_irrelevant_in_stats: false
+  relevance_keywords:
+    - "indie game"
+    - "indie developer"
+    - "game publishing"
+    - "Steam publishing"
+    - "itch.io"
+    - "Unity"
+    - "Unreal Engine"
+    - "game marketing"
+  categories:
+    PP:
+      name: "Platform policies & approval"
+      description: "Submission, approval, and policy compliance"
+      keywords: ["platform", "policy", "approval", "submission", "rejection", "compliance"]
+    FE:
+      name: "Fees & revenue share"
+      description: "Revenue splits and platform fees"
+      keywords: ["fee", "revenue", "commission", "share", "royalty", "cut"]
+    MA:
+      name: "Marketing & discoverability"
+      description: "Promotion and storefront visibility"
+      keywords: ["marketing", "discoverability", "visibility", "promotion", "algorithm"]
+    DE:
+      name: "Development tools & engine support"
+      description: "Engine tooling and support pain points"
+      keywords: ["engine", "Unity", "Unreal", "tool", "support", "SDK", "plugin"]
+    QA:
+      name: "Player feedback & QA"
+      description: "Testing, bug reports, and player reviews"
+      keywords: ["feedback", "bug", "testing", "QA", "review", "patch", "update"]
+    WI:
+      name: "Wish / improvements"
+      description: "Explicit improvement wishes"
+      keywords: ["wish", "hope", "want", "need", "improve"]
+  wish_patterns:
+    - "\\bwish\\b"
+    - "\\bhope\\b"
+    - "\\bwant\\b"
+    - "\\bneed\\b"
+    - "\\bimprove\\b"
+
+platforms:
+  youtube:
+    enabled: false
+    api_key_env: "YOUTUBE_API_KEY"
+    search_queries: []
+    priority_channels: []
+    video_priority_keywords: []
+    quota:
+      max_channels: 0
+      max_videos_per_channel: 0
+      max_comments_per_video: 0
+    transcript:
+      enabled: false
+      whisper_model: "medium"
+      max_videos: 0
+
+  reddit:
+    enabled: true
+    subreddits: ["gamedev", "indiegames", "Unity3D", "unrealengine"]
+    search_queries:
+      - "indie game publishing problems"
+      - "Steam approval process indie"
+      - "revenue share indie game"
+    sort: "relevance"
+    time_filter: "all"
+    quota:
+      max_posts_per_query: 50
+      max_comments_per_post: 100
+
+  twitter:
+    enabled: false
+    api_key_env: "TWITTER_BEARER_TOKEN"
+    search_queries: []
+    search_operators: ""
+    quota:
+      max_results_per_query: 0
+      max_total_tweets: 0
+
+  linkedin:
+    enabled: false
+    api_key_env: "LINKEDIN_ACCESS_TOKEN"
+    search_queries: []
+    quota:
+      max_posts: 0
+
+validation:
+  enabled: false
+  references: []

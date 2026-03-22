@@ -3,7 +3,6 @@ Configuration loader for Multi-Platform Social Media Market Needs Analysis.
 All domain-specific settings come from the instruction YAML file.
 """
 
-import os
 import yaml
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -68,10 +67,15 @@ class Instruction:
     # Project
     project_name: str = ""
     project_description: str = ""
-    # Shared analysis (applies across all platforms)
+    # Shared analysis
     relevance_keywords: List[str] = field(default_factory=list)
     categories: Dict[str, dict] = field(default_factory=dict)
     wish_patterns: List[str] = field(default_factory=list)
+    include_irrelevant_in_stats: bool = False
+    min_comment_words: int = 15
+    language_allowlist: List[str] = field(default_factory=list)
+    dedup_normalized_text: bool = True
+    dedup_min_chars: int = 40
     # Platform configs
     youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
     reddit: RedditConfig = field(default_factory=RedditConfig)
@@ -102,7 +106,6 @@ def load_instruction(yaml_path: str) -> Instruction:
 
     errors = []
 
-    # --- Required fields ---
     project = raw.get("project", {})
     if not project.get("name"):
         errors.append("project.name is required")
@@ -131,7 +134,6 @@ def load_instruction(yaml_path: str) -> Instruction:
             "Instruction validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
         )
 
-    # --- Build instruction ---
     instr = Instruction()
     instr.project_name = project.get("name", "")
     instr.project_description = project.get("description", "")
@@ -141,8 +143,14 @@ def load_instruction(yaml_path: str) -> Instruction:
         r"\bwish\b", r"\bhope\b", r"\bwant\b", r"\bneed\b",
         r"\bif only\b", r"\bwould be nice\b", r"\bshould be\b", r"\bimprove\b",
     ])
+    instr.include_irrelevant_in_stats = bool(
+        analysis.get("include_irrelevant_in_stats", False)
+    )
+    instr.min_comment_words = int(analysis.get("min_comment_words", 15))
+    instr.language_allowlist = [str(x).lower() for x in analysis.get("language_allowlist", [])]
+    instr.dedup_normalized_text = bool(analysis.get("dedup_normalized_text", True))
+    instr.dedup_min_chars = int(analysis.get("dedup_min_chars", 40))
 
-    # YouTube
     yt = platforms.get("youtube", {})
     if yt.get("enabled"):
         quota = yt.get("quota", {})
@@ -162,7 +170,6 @@ def load_instruction(yaml_path: str) -> Instruction:
             term_corrections=tx.get("term_corrections", {}),
         )
 
-    # Reddit
     rd = platforms.get("reddit", {})
     if rd.get("enabled"):
         quota = rd.get("quota", {})
@@ -176,7 +183,6 @@ def load_instruction(yaml_path: str) -> Instruction:
             max_comments_per_post=quota.get("max_comments_per_post", 200),
         )
 
-    # Twitter
     tw = platforms.get("twitter", {})
     if tw.get("enabled"):
         quota = tw.get("quota", {})
@@ -189,7 +195,6 @@ def load_instruction(yaml_path: str) -> Instruction:
             max_total_tweets=quota.get("max_total_tweets", 1000),
         )
 
-    # LinkedIn
     li = platforms.get("linkedin", {})
     if li.get("enabled"):
         quota = li.get("quota", {})
@@ -200,7 +205,6 @@ def load_instruction(yaml_path: str) -> Instruction:
             max_posts=quota.get("max_posts", 100),
         )
 
-    # Validation
     val = raw.get("validation", {})
     instr.validation_enabled = val.get("enabled", False)
     instr.validation_references = val.get("references", [])
@@ -214,13 +218,11 @@ def load_instruction(yaml_path: str) -> Instruction:
 
 @dataclass
 class SocialPost:
-    """Unified post/comment model across all platforms.
-    Each platform adapter converts its native data into this format.
-    """
+    """Unified post/comment model across all platforms."""
     post_id: str
-    platform: str               # youtube, reddit, twitter, linkedin
-    source_id: str              # video_id, post_id, tweet_id, etc.
-    source_title: str           # video title, post title, tweet text preview
+    platform: str
+    source_id: str
+    source_title: str
     author: str
     text: str
     like_count: int = 0
@@ -229,12 +231,13 @@ class SocialPost:
     parent_id: Optional[str] = None
     timestamp: str = ""
     url: str = ""
-    # Analysis fields
     is_relevant: bool = False
+    relevance_score: float = 0.0
     categories: List[str] = field(default_factory=list)
+    category_scores: Dict[str, float] = field(default_factory=dict)
     has_wish: bool = False
     word_count: int = 0
-    # Platform-specific metadata (flexible dict)
+    analysis_complete: bool = False
     metadata: Dict = field(default_factory=dict)
 
     def to_csv_row(self) -> dict:
@@ -250,9 +253,12 @@ class SocialPost:
             "timestamp": self.timestamp,
             "url": self.url,
             "is_relevant": self.is_relevant,
+            "relevance_score": self.relevance_score,
             "categories": "|".join(self.categories),
+            "category_scores": json_dumps_safe(self.category_scores),
             "has_wish": self.has_wish,
             "word_count": self.word_count,
+            "analysis_complete": self.analysis_complete,
         }
 
     @staticmethod
@@ -260,13 +266,15 @@ class SocialPost:
         return [
             "post_id", "platform", "source_id", "source_title", "author",
             "text", "like_count", "is_reply", "timestamp", "url",
-            "is_relevant", "categories", "has_wish", "word_count",
+            "is_relevant", "relevance_score", "categories", "category_scores",
+            "has_wish", "word_count", "analysis_complete",
         ]
 
 
-# ---------------------------------------------------------------------------
-# System constants
-# ---------------------------------------------------------------------------
+def json_dumps_safe(value) -> str:
+    import json
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
 
 OUTPUT_DIR = "output"
 CHECKPOINT_DIR = "output/checkpoints"

@@ -7,6 +7,7 @@ Due diligence on mining unmet market needs from social media — what users say 
 A social listening toolkit designed to be operated by an AI agent (Claude Code, Codex, etc.). You describe what you want to investigate in plain language, the agent generates the research plan, runs the tools, and delivers a consulting-grade report.
 
 For deep implementation details, debugging notes, and extension guidance, see `ARCHITECTURE.md`.
+Ready-made instruction examples live in `examples/` for amputees, EV charging, wheelchair accessibility, smart home privacy, pet telehealth, indie game publishing, urban beekeeping, and sourdough baking.
 
 ### Example conversations
 
@@ -42,6 +43,13 @@ cp instruction_template.yaml instruction.yaml
 # Edit instruction.yaml for your market/topic
 python3 tools/run.py --instruction instruction.yaml
 ```
+
+Useful analysis controls in `instruction.yaml`:
+
+- `analysis.min_comment_words` trims low-signal short comments before analysis
+- `analysis.language_allowlist` restricts collectors to desired languages when hints are available
+- `analysis.dedup_normalized_text` and `analysis.dedup_min_chars` reduce near-duplicate posts
+- `analysis.include_irrelevant_in_stats` keeps summary stats focused on relevant posts by default
 
 ## What you need
 
@@ -105,6 +113,7 @@ unheard-buzz/
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
+├── instruction_template.yaml # Manual YAML template with analysis controls
 ├── tools/                 # Python toolkit
 │   ├── run.py             # Main pipeline orchestrator
 │   ├── config.py          # Loads instruction.yaml, tracks API quota
@@ -116,7 +125,10 @@ unheard-buzz/
 │   ├── twitter.py         # Twitter/X API v2
 │   └── linkedin.py        # LinkedIn (CSV import)
 ├── examples/
-│   └── amputee.yaml       # Worked example instruction
+│   ├── amputee.yaml
+│   ├── ev_charging.yaml
+│   ├── wheelchair_accessibility.yaml
+│   └── ...                # More worked example instructions
 ├── input/                 # Place LinkedIn CSV exports here
 └── output/                # Generated reports (gitignored)
 ```

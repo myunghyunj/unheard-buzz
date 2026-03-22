@@ -1,13 +1,5 @@
 """
 Main orchestrator for multi-platform social media analysis.
-
-Runs platform agents in parallel, applies unified analysis,
-and generates cross-platform reports.
-
-Usage:
-    python run.py --instruction examples/amputee.yaml
-    python run.py --instruction my.yaml --platforms youtube,reddit
-    python run.py --instruction my.yaml --dry-run
 """
 
 import argparse
@@ -18,20 +10,16 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
+from collections import Counter
 
 from dotenv import load_dotenv
 
-from config import Instruction, SocialPost, load_instruction, OUTPUT_DIR, CHECKPOINT_DIR
-from analyzer import filter_posts
+from config import Instruction, SocialPost, load_instruction, OUTPUT_DIR
+from analyzer import filter_posts, posts_for_stats
 from reports import generate_all
 
 
-# ---------------------------------------------------------------------------
-# Checkpoint helpers
-# ---------------------------------------------------------------------------
-
 def _save_checkpoint(phase: str, data: dict, output_dir: str) -> str:
-    """Persist phase output to a JSON checkpoint file."""
     cp_dir = os.path.join(output_dir, "checkpoints")
     os.makedirs(cp_dir, exist_ok=True)
     filepath = os.path.join(cp_dir, f"{phase}.json")
@@ -41,7 +29,6 @@ def _save_checkpoint(phase: str, data: dict, output_dir: str) -> str:
 
 
 def _load_checkpoint(phase: str, output_dir: str) -> Optional[dict]:
-    """Load a checkpoint if it exists."""
     filepath = os.path.join(output_dir, "checkpoints", f"{phase}.json")
     if os.path.exists(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
@@ -50,7 +37,6 @@ def _load_checkpoint(phase: str, output_dir: str) -> Optional[dict]:
 
 
 def _posts_to_dicts(posts: List[SocialPost]) -> List[dict]:
-    """Serialize SocialPost list for checkpointing."""
     return [
         {
             "post_id": p.post_id,
@@ -66,9 +52,12 @@ def _posts_to_dicts(posts: List[SocialPost]) -> List[dict]:
             "timestamp": p.timestamp,
             "url": p.url,
             "is_relevant": p.is_relevant,
+            "relevance_score": p.relevance_score,
             "categories": p.categories,
+            "category_scores": p.category_scores,
             "has_wish": p.has_wish,
             "word_count": p.word_count,
+            "analysis_complete": p.analysis_complete,
             "metadata": p.metadata,
         }
         for p in posts
@@ -76,10 +65,9 @@ def _posts_to_dicts(posts: List[SocialPost]) -> List[dict]:
 
 
 def _dicts_to_posts(dicts: List[dict]) -> List[SocialPost]:
-    """Deserialize checkpointed dicts back to SocialPost objects."""
     posts = []
     for d in dicts:
-        cats = d.get("categories", "")
+        cats = d.get("categories", [])
         if isinstance(cats, str):
             cats = [c for c in cats.split("|") if c]
         post = SocialPost(
@@ -96,21 +84,19 @@ def _dicts_to_posts(dicts: List[dict]) -> List[SocialPost]:
             timestamp=d.get("timestamp", ""),
             url=d.get("url", ""),
             is_relevant=d.get("is_relevant", False),
+            relevance_score=float(d.get("relevance_score", 0.0)),
             categories=cats,
+            category_scores=d.get("category_scores", {}) if isinstance(d.get("category_scores", {}), dict) else {},
             has_wish=d.get("has_wish", False),
             word_count=int(d.get("word_count", 0)),
+            analysis_complete=bool(d.get("analysis_complete", False)),
             metadata=d.get("metadata", {}) if isinstance(d.get("metadata", {}), dict) else {},
         )
         posts.append(post)
     return posts
 
 
-# ---------------------------------------------------------------------------
-# Platform agent runners (thin wrappers that import lazily)
-# ---------------------------------------------------------------------------
-
 def _run_youtube(instruction: Instruction) -> Dict:
-    """Run YouTube agent and return results dict."""
     try:
         from youtube import run_youtube
         return run_youtube(instruction)
@@ -124,7 +110,6 @@ def _run_youtube(instruction: Instruction) -> Dict:
 
 
 def _run_reddit(instruction: Instruction) -> Dict:
-    """Run Reddit agent and return results dict."""
     try:
         from reddit import run_reddit
         return run_reddit(instruction)
@@ -138,7 +123,6 @@ def _run_reddit(instruction: Instruction) -> Dict:
 
 
 def _run_twitter(instruction: Instruction) -> Dict:
-    """Run Twitter agent and return results dict."""
     try:
         from twitter import run_twitter
         return run_twitter(instruction)
@@ -152,7 +136,6 @@ def _run_twitter(instruction: Instruction) -> Dict:
 
 
 def _run_linkedin(instruction: Instruction) -> Dict:
-    """Run LinkedIn agent and return results dict."""
     try:
         from linkedin import run_linkedin
         return run_linkedin(instruction)
@@ -173,12 +156,7 @@ _PLATFORM_RUNNERS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Google Trends (Phase 0)
-# ---------------------------------------------------------------------------
-
 def _run_trends(instruction: Instruction, output_dir: str) -> Optional[dict]:
-    """Run Google Trends analysis if available."""
     try:
         from trends import run_trends_analysis
         result = run_trends_analysis(instruction, output_dir)
@@ -194,7 +172,6 @@ def _run_trends(instruction: Instruction, output_dir: str) -> Optional[dict]:
 
 
 def _summarize_trend_direction(trends_result: Optional[dict]) -> str:
-    """Collapse per-keyword Google Trends metrics into one summary label."""
     if not trends_result or not isinstance(trends_result, dict):
         return "N/A"
 
@@ -221,10 +198,6 @@ def _summarize_trend_direction(trends_result: Optional[dict]) -> str:
     return "mixed"
 
 
-# ---------------------------------------------------------------------------
-# Main pipeline
-# ---------------------------------------------------------------------------
-
 def run_pipeline(
     instruction: Instruction,
     platforms_override: Optional[List[str]] = None,
@@ -232,30 +205,9 @@ def run_pipeline(
     resume: bool = False,
     skip_trends: bool = False,
 ) -> dict:
-    """Execute the full analysis pipeline.
-
-    Phases:
-        0. Google Trends analysis
-        1. Platform agents IN PARALLEL
-        2. Unified analysis (filter + categorize)
-        2b. Timeseries Insights anomaly detection (optional)
-        3. Report generation
-        4. Validation (if enabled)
-
-    Args:
-        instruction: Parsed instruction config.
-        platforms_override: If set, only run these platforms.
-        output_dir: Where to write reports and checkpoints.
-        resume: If True, load from checkpoints where possible.
-        skip_trends: If True, skip Phase 0.
-
-    Returns:
-        Summary dict with stats and filepaths.
-    """
     os.makedirs(output_dir, exist_ok=True)
     start_time = time.time()
 
-    # Determine which platforms to run
     if platforms_override:
         enabled = [p for p in platforms_override if p in _PLATFORM_RUNNERS]
     else:
@@ -270,9 +222,6 @@ def run_pipeline(
     print(f"Output: {output_dir}")
     print()
 
-    # ------------------------------------------------------------------
-    # Phase 0: Google Trends
-    # ------------------------------------------------------------------
     trends_result = None
     if not skip_trends:
         print("=" * 60)
@@ -286,9 +235,6 @@ def run_pipeline(
             trends_result = _run_trends(instruction, output_dir)
         print()
 
-    # ------------------------------------------------------------------
-    # Phase 1: Platform agents IN PARALLEL
-    # ------------------------------------------------------------------
     print("=" * 60)
     print("PHASE 1: Collecting Posts (parallel)")
     print("=" * 60)
@@ -328,7 +274,6 @@ def run_pipeline(
                     platform_errors[platform] = str(e)
                     platform_stats[platform] = 0
 
-        # Checkpoint
         _save_checkpoint("phase1_collection", {
             "posts": _posts_to_dicts(all_posts),
             "platform_stats": platform_stats,
@@ -338,35 +283,34 @@ def run_pipeline(
     print(f"\n  Total raw posts: {len(all_posts)}")
     print()
 
-    # ------------------------------------------------------------------
-    # Phase 2: Unified analysis
-    # ------------------------------------------------------------------
     print("=" * 60)
     print("PHASE 2: Unified Analysis")
     print("=" * 60)
 
+    analysis_loaded = False
     if resume:
         cp = _load_checkpoint("phase2_analysis", output_dir)
-        if cp:
-            print("  Loaded from checkpoint.")
+        if cp and cp.get("analysis_complete") is True:
+            print("  Loaded analyzed posts from checkpoint.")
             all_posts = _dicts_to_posts(cp.get("posts", []))
+            analysis_loaded = True
 
-    if not any(p.word_count > 0 for p in all_posts):
+    if not analysis_loaded:
         all_posts = filter_posts(all_posts, instruction)
         _save_checkpoint("phase2_analysis", {
+            "analysis_complete": True,
             "posts": _posts_to_dicts(all_posts),
         }, output_dir)
 
     relevant = sum(1 for p in all_posts if p.is_relevant)
     wishes = sum(1 for p in all_posts if p.has_wish)
+    analyzed_complete = sum(1 for p in all_posts if p.analysis_complete)
     print(f"  After filtering: {len(all_posts)} posts")
     print(f"  Relevant: {relevant}")
     print(f"  Wish-tagged: {wishes}")
+    print(f"  Analysis-complete posts: {analyzed_complete}")
     print()
 
-    # ------------------------------------------------------------------
-    # Phase 2b: Timeseries Insights API (if Google Cloud key available)
-    # ------------------------------------------------------------------
     tsi_result = None
     if not skip_trends and all_posts:
         try:
@@ -391,9 +335,6 @@ def run_pipeline(
         except Exception as e:
             print(f"  [TSI] Skipped: {e}")
 
-    # ------------------------------------------------------------------
-    # Phase 3: Report generation
-    # ------------------------------------------------------------------
     print("=" * 60)
     print("PHASE 3: Report Generation")
     print("=" * 60)
@@ -401,17 +342,12 @@ def run_pipeline(
     generated = generate_all(all_posts, instruction, output_dir)
     if tsi_result and tsi_result.get("report_path"):
         generated["tsi_anomaly_report_md"] = tsi_result["report_path"]
-    _save_checkpoint("phase3_reports", {
-        "generated_files": generated,
-    }, output_dir)
+    _save_checkpoint("phase3_reports", {"generated_files": generated}, output_dir)
 
     for name, path in generated.items():
         print(f"  {name}: {path}")
     print()
 
-    # ------------------------------------------------------------------
-    # Phase 4: Validation (if enabled)
-    # ------------------------------------------------------------------
     if instruction.validation_enabled:
         print("=" * 60)
         print("PHASE 4: Validation")
@@ -423,25 +359,18 @@ def run_pipeline(
             print("  Validation report was not generated.")
         print()
 
-    # ------------------------------------------------------------------
-    # Final summary
-    # ------------------------------------------------------------------
     elapsed = time.time() - start_time
-
-    # Determine trend direction from trends result
     trend_direction = _summarize_trend_direction(trends_result)
 
-    # Compute top categories
-    from collections import Counter
+    stats_posts = posts_for_stats(all_posts, instruction)
     cat_counter = Counter()
-    for p in all_posts:
+    for p in stats_posts:
         for c in p.categories:
             cat_counter[c] += 1
     top_cats = [code for code, _ in cat_counter.most_common(5)]
 
     pct_relevant = (relevant / len(all_posts) * 100) if all_posts else 0
 
-    # Platform post count strings
     plat_counts = []
     for plat in ("youtube", "reddit", "twitter", "linkedin"):
         count = platform_stats.get(plat, 0)
@@ -453,6 +382,8 @@ def run_pipeline(
         "platform_stats": platform_stats,
         "platform_errors": platform_errors,
         "total_posts": len(all_posts),
+        "stats_scope": "all_posts" if instruction.include_irrelevant_in_stats else "relevant_only",
+        "stats_posts": len(stats_posts),
         "relevant": relevant,
         "wishes": wishes,
         "top_categories": top_cats,
@@ -469,6 +400,7 @@ def run_pipeline(
     print(f"Posts collected:    {', '.join(plat_counts)}")
     print(f"Total posts:        {len(all_posts)}")
     print(f"Relevant:           {relevant} ({pct_relevant:.1f}%)")
+    print(f"Stats scope:        {summary['stats_scope']} ({len(stats_posts)} posts)")
     print(f"Wish-tagged:        {wishes}")
     print(f"Top categories:     {', '.join(top_cats) if top_cats else 'none'}")
     print(f"Trend direction:    {trend_direction}")
@@ -484,18 +416,26 @@ def run_pipeline(
     return summary
 
 
-# ---------------------------------------------------------------------------
-# Dry-run display
-# ---------------------------------------------------------------------------
-
 def _dry_run(instruction: Instruction, platforms: List[str], output_dir: str):
-    """Show the execution plan without running anything."""
+    tsi_enabled = bool(os.getenv("GOOGLE_CLOUD_API_KEY") and os.getenv("GOOGLE_CLOUD_PROJECT"))
+
     print("=" * 60)
     print("DRY RUN — Execution Plan")
     print("=" * 60)
     print(f"Project:     {instruction.project_name}")
     print(f"Description: {instruction.project_description}")
     print(f"Output dir:  {output_dir}")
+    print()
+
+    print("Planned phases:")
+    print("  0. Google Trends (pytrends)")
+    print("  1. Platform collection in parallel")
+    print("  2. Unified analysis")
+    if tsi_enabled:
+        print("  2b. Timeseries Insights anomaly detection")
+    print("  3. Report generation")
+    if instruction.validation_enabled:
+        print("  4. Validation")
     print()
 
     print("Platforms to run:")
@@ -515,81 +455,41 @@ def _dry_run(instruction: Instruction, platforms: List[str], output_dir: str):
 
     print(f"Relevance keywords: {len(instruction.relevance_keywords)}")
     print(f"Wish patterns: {len(instruction.wish_patterns)}")
+    print(f"Minimum words: {instruction.min_comment_words}")
+    print(
+        "Language allowlist: "
+        + (", ".join(instruction.language_allowlist) if instruction.language_allowlist else "none")
+    )
+    print(f"Normalized-text dedup: {instruction.dedup_normalized_text}")
+    print(f"Dedup min chars: {instruction.dedup_min_chars}")
+    print(f"Include irrelevant in stats: {instruction.include_irrelevant_in_stats}")
+    print(f"TSI enabled: {tsi_enabled}")
     print(f"Validation: {'enabled' if instruction.validation_enabled else 'disabled'}")
-    if instruction.validation_references:
-        print(f"  References: {len(instruction.validation_references)}")
-    print()
-
-    print("Pipeline phases:")
-    print("  0. Google Trends analysis")
-    print("  1. Platform agents (parallel)")
-    print("  2. Unified analysis (filter + categorize)")
-    if os.environ.get("GOOGLE_CLOUD_API_KEY") and os.environ.get("GOOGLE_CLOUD_PROJECT"):
-        print("  2b. Timeseries Insights anomaly detection (optional)")
-    print("  3. Report generation")
-    if instruction.validation_enabled:
-        print("  4. Validation")
     print()
     print("Use without --dry-run to execute.")
 
 
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Multi-Platform Social Media Analysis Tool",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python run.py --instruction examples/amputee.yaml
-  python run.py --instruction my.yaml --platforms youtube,reddit
-  python run.py --instruction my.yaml --dry-run
-  python run.py --instruction my.yaml --resume --output-dir output_v2
-        """,
-    )
-    parser.add_argument(
-        "--instruction", required=True,
-        help="Path to instruction YAML file",
-    )
-    parser.add_argument(
-        "--platforms",
-        help="Comma-separated list of platforms to run (overrides instruction file)",
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Show execution plan without running",
-    )
-    parser.add_argument(
-        "--resume", action="store_true",
-        help="Resume from checkpoints if available",
-    )
-    parser.add_argument(
-        "--output-dir", default=OUTPUT_DIR,
-        help=f"Output directory (default: {OUTPUT_DIR})",
-    )
-    parser.add_argument(
-        "--skip-trends", action="store_true",
-        help="Skip Google Trends analysis (Phase 0)",
-    )
+    parser = argparse.ArgumentParser(description="Multi-Platform Social Media Analysis Tool")
+    parser.add_argument("--instruction", required=True, help="Path to instruction YAML file")
+    parser.add_argument("--platforms", help="Comma-separated list of platforms to run")
+    parser.add_argument("--dry-run", action="store_true", help="Show execution plan without running")
+    parser.add_argument("--resume", action="store_true", help="Resume from checkpoints if available")
+    parser.add_argument("--output-dir", default=OUTPUT_DIR, help=f"Output directory (default: {OUTPUT_DIR})")
+    parser.add_argument("--skip-trends", action="store_true", help="Skip Google Trends analysis (Phase 0)")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    # Load environment variables
     load_dotenv()
-
     args = parse_args()
 
-    # Load and validate instruction
     try:
         instruction = load_instruction(args.instruction)
     except (FileNotFoundError, ValueError) as e:
         print(f"ERROR: {e}")
         sys.exit(1)
 
-    # Determine platforms
     platforms_override = None
     if args.platforms:
         platforms_override = [p.strip().lower() for p in args.platforms.split(",")]

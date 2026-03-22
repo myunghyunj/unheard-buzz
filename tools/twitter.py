@@ -1,16 +1,14 @@
 """Twitter/X platform agent -- searches recent tweets via API v2.
 
-Uses Bearer token authentication (free tier). The free tier provides
-access to the recent search endpoint (last 7 days, 1500 tweets/month).
-
-All domain-specific configuration comes from the ``instruction`` parameter.
-Nothing is hardcoded.
+v2 collector patch:
+- optional language allowlist enforced using API-provided `lang`
+- normalized-text dedup across multiple queries
 """
 
 import logging
 import os
-import sys
 import time
+import re
 from typing import Dict, List, Optional
 
 import requests
@@ -19,55 +17,61 @@ from config import Instruction, SocialPost
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 _SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent"
 _TWEET_FIELDS = "created_at,public_metrics,conversation_id,in_reply_to_user_id,lang"
 _EXPANSIONS = "author_id"
 _USER_FIELDS = "username"
-_MAX_RESULTS_PER_PAGE = 100  # Twitter API max per page
+_MAX_RESULTS_PER_PAGE = 100
 _RETRY_DELAY_DEFAULT = 60
 _MAX_RETRIES = 3
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 def _get_bearer_token(instruction: Instruction) -> Optional[str]:
-    """Retrieve the Bearer token from the environment variable."""
     env_var = instruction.twitter.api_key_env
     token = os.environ.get(env_var)
     if not token:
-        logger.warning(
-            "Twitter Bearer token not found. Set the %s environment variable. "
-            "To obtain a token:\n"
-            "  1. Go to https://developer.twitter.com/en/portal/dashboard\n"
-            "  2. Create a project and app\n"
-            "  3. Generate a Bearer token\n"
-            "  4. export %s=your_token_here\n"
-            "Skipping Twitter.",
-            env_var, env_var,
-        )
+        logger.warning("Twitter Bearer token not found in %s. Skipping Twitter.", env_var)
         return None
     return token
 
 
 def _build_headers(token: str) -> dict:
-    """Build authorization headers for Twitter API v2."""
     return {"Authorization": f"Bearer {token}"}
 
 
-def _search_tweets(query: str, headers: dict, max_results: int,
-                   max_total: int, collected_so_far: int) -> List[dict]:
-    """Execute a single query against the recent search endpoint.
+def _request_with_retry(url: str, headers: dict, params: dict, retries: int = _MAX_RETRIES) -> Optional[dict]:
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.get(url, headers=headers, params=params, timeout=30)
 
-    Handles pagination via next_token and respects max_total limit.
-    Returns list of raw tweet dicts with author username attached.
-    """
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code == 401:
+                logger.error("Twitter API returned 401 Unauthorized.")
+                return None
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get("Retry-After", _RETRY_DELAY_DEFAULT))
+                logger.warning("Twitter rate limit hit (429). Waiting %ds (attempt %d/%d).", retry_after, attempt, retries)
+                time.sleep(retry_after)
+                continue
+            if resp.status_code == 403:
+                logger.warning("Twitter API returned 403 Forbidden.")
+                return None
+
+            logger.warning(
+                "Twitter API returned %d: %s (attempt %d/%d)",
+                resp.status_code, resp.text[:200], attempt, retries,
+            )
+        except requests.exceptions.Timeout:
+            logger.warning("Twitter request timed out (attempt %d/%d)", attempt, retries)
+        except requests.exceptions.RequestException as exc:
+            logger.warning("Twitter request failed: %s (attempt %d/%d)", exc, attempt, retries)
+
+    logger.error("Exhausted retries for Twitter API request.")
+    return None
+
+
+def _search_tweets(query: str, headers: dict, max_results: int, max_total: int, collected_so_far: int) -> List[dict]:
     tweets = []
     next_token = None
     remaining = max_total - collected_so_far
@@ -79,7 +83,7 @@ def _search_tweets(query: str, headers: dict, max_results: int,
         page_size = min(_MAX_RESULTS_PER_PAGE, max_results, remaining)
         params = {
             "query": query,
-            "max_results": max(10, page_size),  # Twitter minimum is 10
+            "max_results": max(10, page_size),
             "tweet.fields": _TWEET_FIELDS,
             "expansions": _EXPANSIONS,
             "user.fields": _USER_FIELDS,
@@ -91,13 +95,11 @@ def _search_tweets(query: str, headers: dict, max_results: int,
         if resp is None:
             break
 
-        # Build user ID -> username mapping from includes
         users_map: Dict[str, str] = {}
         includes = resp.get("includes", {})
         for user in includes.get("users", []):
             users_map[user.get("id", "")] = user.get("username", "")
 
-        # Process tweets
         data = resp.get("data", [])
         if not data:
             break
@@ -108,8 +110,6 @@ def _search_tweets(query: str, headers: dict, max_results: int,
             tweets.append(tweet)
 
         remaining = max_total - collected_so_far - len(tweets)
-
-        # Check for next page
         meta = resp.get("meta", {})
         next_token = meta.get("next_token")
         if not next_token:
@@ -118,64 +118,7 @@ def _search_tweets(query: str, headers: dict, max_results: int,
     return tweets
 
 
-def _request_with_retry(url: str, headers: dict, params: dict,
-                        retries: int = _MAX_RETRIES) -> Optional[dict]:
-    """Make a GET request with retry on rate limits and errors."""
-    for attempt in range(1, retries + 1):
-        try:
-            resp = requests.get(url, headers=headers, params=params, timeout=30)
-
-            if resp.status_code == 200:
-                return resp.json()
-
-            if resp.status_code == 401:
-                logger.error(
-                    "Twitter API returned 401 Unauthorized. "
-                    "Your Bearer token may be invalid or expired. "
-                    "Regenerate it at https://developer.twitter.com"
-                )
-                return None
-
-            if resp.status_code == 429:
-                retry_after = int(
-                    resp.headers.get("Retry-After", _RETRY_DELAY_DEFAULT)
-                )
-                logger.warning(
-                    "Twitter rate limit hit (429). Waiting %ds (attempt %d/%d). "
-                    "Free tier: 1500 tweets/month, 1 request/second.",
-                    retry_after, attempt, retries,
-                )
-                time.sleep(retry_after)
-                continue
-
-            if resp.status_code == 403:
-                logger.warning(
-                    "Twitter API returned 403 Forbidden. "
-                    "Your app may lack the required access level."
-                )
-                return None
-
-            logger.warning(
-                "Twitter API returned %d: %s (attempt %d/%d)",
-                resp.status_code, resp.text[:200], attempt, retries,
-            )
-
-        except requests.exceptions.Timeout:
-            logger.warning(
-                "Twitter request timed out (attempt %d/%d)", attempt, retries,
-            )
-        except requests.exceptions.RequestException as exc:
-            logger.warning(
-                "Twitter request failed: %s (attempt %d/%d)",
-                exc, attempt, retries,
-            )
-
-    logger.error("Exhausted retries for Twitter API request.")
-    return None
-
-
 def _tweet_to_socialpost(tweet: dict) -> SocialPost:
-    """Convert a raw Twitter API v2 tweet dict to a SocialPost."""
     tweet_id = tweet.get("id", "")
     text = tweet.get("text", "")
     username = tweet.get("_username", "")
@@ -210,26 +153,45 @@ def _tweet_to_socialpost(tweet: dict) -> SocialPost:
     )
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+def _normalize_text_signature(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"https?://\S+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"[^a-z0-9가-힣\u0400-\u04FF\u3040-\u30ff\u4e00-\u9fff#@ ]+", "", text)
+    return text.strip()
+
+
+def _dedup_posts(posts: List[SocialPost], instruction: Instruction) -> tuple[List[SocialPost], int]:
+    if not getattr(instruction, "dedup_normalized_text", True):
+        return posts, 0
+
+    seen_ids = set()
+    seen_signatures = set()
+    kept = []
+    removed = 0
+    min_chars = max(1, getattr(instruction, "dedup_min_chars", 40))
+
+    for post in posts:
+        if post.post_id in seen_ids:
+            removed += 1
+            continue
+        seen_ids.add(post.post_id)
+
+        signature = _normalize_text_signature(post.text)
+        if len(signature) >= min_chars:
+            sig_key = (post.platform, signature)
+            if sig_key in seen_signatures:
+                removed += 1
+                continue
+            seen_signatures.add(sig_key)
+            post.metadata["text_signature"] = signature[:120]
+
+        kept.append(post)
+
+    return kept, removed
+
 
 def run_twitter(instruction: Instruction) -> dict:
-    """Main entry point for the Twitter/X agent.
-
-    Searches for recent tweets matching each configured query,
-    respecting the total tweet limit and rate limits.
-
-    Returns:
-        dict with keys:
-            - posts: List[SocialPost]
-            - stats: dict with collection statistics
-
-    Note: Free tier limitations:
-        - Only tweets from the last 7 days
-        - 1500 tweets per month cap
-        - 1 request per second
-    """
     cfg = instruction.twitter
     if not cfg.enabled:
         logger.info("Twitter is not enabled in instruction. Skipping.")
@@ -245,26 +207,22 @@ def run_twitter(instruction: Instruction) -> dict:
 
     headers = _build_headers(token)
     all_posts: List[SocialPost] = []
+    allowed_langs = {x.lower() for x in getattr(instruction, "language_allowlist", [])}
     stats = {
         "queries_executed": 0,
         "tweets_collected": 0,
         "max_total": cfg.max_total_tweets,
+        "lang_filtered": 0,
+        "duplicates_removed": 0,
         "errors": 0,
     }
 
     for query_base in cfg.search_queries:
         if stats["tweets_collected"] >= cfg.max_total_tweets:
-            logger.info("Reached max_total_tweets (%d). Stopping.", cfg.max_total_tweets)
             break
 
-        # Append search operators (e.g., "-is:retweet lang:en")
         full_query = f"{query_base} {cfg.search_operators}".strip()
         stats["queries_executed"] += 1
-
-        logger.info(
-            "Searching Twitter for: %s (collected %d/%d so far)",
-            full_query, stats["tweets_collected"], cfg.max_total_tweets,
-        )
 
         try:
             raw_tweets = _search_tweets(
@@ -276,22 +234,24 @@ def run_twitter(instruction: Instruction) -> dict:
             )
 
             for tweet in raw_tweets:
+                tweet_lang = str(tweet.get("lang", "")).lower()
+                if allowed_langs and tweet_lang and tweet_lang not in allowed_langs:
+                    stats["lang_filtered"] += 1
+                    continue
                 post = _tweet_to_socialpost(tweet)
                 all_posts.append(post)
                 stats["tweets_collected"] += 1
-
-            logger.info(
-                "Query returned %d tweets. Total: %d/%d",
-                len(raw_tweets), stats["tweets_collected"], cfg.max_total_tweets,
-            )
 
         except Exception as exc:
             logger.error("Error processing Twitter query '%s': %s", query_base, exc)
             stats["errors"] += 1
 
+    deduped_posts, duplicates_removed = _dedup_posts(all_posts, instruction)
+    stats["duplicates_removed"] = duplicates_removed
+
     logger.info(
-        "Twitter agent complete: %d tweets collected across %d queries, %d errors.",
-        stats["tweets_collected"], stats["queries_executed"], stats["errors"],
+        "Twitter agent complete: %d tweets after dedup, %d lang-filtered, %d errors.",
+        len(deduped_posts), stats["lang_filtered"], stats["errors"],
     )
 
-    return {"posts": all_posts, "stats": stats}
+    return {"posts": deduped_posts, "stats": stats}

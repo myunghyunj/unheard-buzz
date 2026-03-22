@@ -1,0 +1,95 @@
+project:
+  name: "Home Sourdough Baking Challenges"
+  description: "Mining comments from home bakers about maintaining starters, fermentation, crust and crumb, equipment, and flavor"
+
+analysis:
+  min_comment_words: 15
+  include_irrelevant_in_stats: false
+  relevance_keywords:
+    - "sourdough"
+    - "sourdough starter"
+    - "bread baking"
+    - "crumb"
+    - "crust"
+    - "fermentation"
+    - "proofing"
+  categories:
+    ST:
+      name: "Starter maintenance"
+      description: "Starter feeding, storage, and recovery"
+      keywords: ["starter", "feed", "feeding", "discard", "refresh"]
+    FT:
+      name: "Fermentation & proofing"
+      description: "Bulk fermentation, proofing, and timing"
+      keywords: ["fermentation", "proof", "proofing", "bulk", "rise", "overproof", "underproof"]
+    CR:
+      name: "Crumb & crust structure"
+      description: "Texture, crust formation, and loaf structure"
+      keywords: ["crumb", "crust", "open crumb", "dense", "ear", "score", "bloom"]
+    EQ:
+      name: "Equipment & oven performance"
+      description: "Oven, Dutch oven, steam, and temperature control"
+      keywords: ["oven", "Dutch oven", "steam", "temperature", "baking stone"]
+    FL:
+      name: "Flavor & taste"
+      description: "Sourness, aroma, and flour-driven flavor"
+      keywords: ["flavor", "taste", "sour", "sweet", "hydration", "flour"]
+    WI:
+      name: "Wish / improvements"
+      description: "Explicit improvement wishes"
+      keywords: ["wish", "hope", "want", "need", "improve"]
+  wish_patterns:
+    - "\\bwish\\b"
+    - "\\bhope\\b"
+    - "\\bwant\\b"
+    - "\\bneed\\b"
+    - "\\bimprove\\b"
+
+platforms:
+  youtube:
+    enabled: false
+    api_key_env: "YOUTUBE_API_KEY"
+    search_queries: []
+    priority_channels: []
+    video_priority_keywords: []
+    quota:
+      max_channels: 0
+      max_videos_per_channel: 0
+      max_comments_per_video: 0
+    transcript:
+      enabled: false
+      whisper_model: "medium"
+      max_videos: 0
+
+  reddit:
+    enabled: true
+    subreddits: ["sourdough", "Breadit", "baking", "AskBakers"]
+    search_queries:
+      - "sourdough starter problems"
+      - "bulk fermentation sourdough"
+      - "home oven sourdough"
+    sort: "relevance"
+    time_filter: "all"
+    quota:
+      max_posts_per_query: 50
+      max_comments_per_post: 100
+
+  twitter:
+    enabled: false
+    api_key_env: "TWITTER_BEARER_TOKEN"
+    search_queries: []
+    search_operators: ""
+    quota:
+      max_results_per_query: 0
+      max_total_tweets: 0
+
+  linkedin:
+    enabled: false
+    api_key_env: "LINKEDIN_ACCESS_TOKEN"
+    search_queries: []
+    quota:
+      max_posts: 0
+
+validation:
+  enabled: false
+  references: []

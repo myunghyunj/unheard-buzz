@@ -1,0 +1,96 @@
+project:
+  name: "Smart Home Privacy & Security Concerns"
+  description: "Mining user concerns about smart home device security, data privacy, interoperability, voice recognition, and cost"
+
+analysis:
+  min_comment_words: 15
+  include_irrelevant_in_stats: false
+  relevance_keywords:
+    - "smart home"
+    - "home automation"
+    - "IoT"
+    - "voice assistant"
+    - "smart speaker"
+    - "Alexa"
+    - "Google Home"
+    - "smart lock"
+  categories:
+    SV:
+      name: "Security vulnerabilities"
+      description: "Hacking risks and device vulnerabilities"
+      keywords: ["hack", "hacking", "exploit", "vulnerability", "breach", "security risk"]
+    PR:
+      name: "Privacy & data collection"
+      description: "Privacy policies, tracking, and surveillance concerns"
+      keywords: ["privacy", "data", "surveillance", "listening", "tracking", "record"]
+    IN:
+      name: "Interoperability & integration"
+      description: "Cross-platform compatibility issues"
+      keywords: ["compatibility", "integration", "HomeKit", "Zigbee", "Z-Wave", "matter"]
+    VI:
+      name: "Voice & AI reliability"
+      description: "Misheard commands, false triggers, and assistant errors"
+      keywords: ["voice", "misheard", "false trigger", "assistant", "wake word"]
+    CO:
+      name: "Cost & subscriptions"
+      description: "Hardware cost and recurring fee complaints"
+      keywords: ["cost", "expensive", "price", "subscription", "fee", "monthly"]
+    WI:
+      name: "Wish / improvements"
+      description: "Explicit wishes and product improvement requests"
+      keywords: ["wish", "hope", "want", "need", "improve"]
+  wish_patterns:
+    - "\\bwish\\b"
+    - "\\bhope\\b"
+    - "\\bwant\\b"
+    - "\\bneed\\b"
+    - "\\bimprove\\b"
+
+platforms:
+  youtube:
+    enabled: false
+    api_key_env: "YOUTUBE_API_KEY"
+    search_queries: []
+    priority_channels: []
+    video_priority_keywords: []
+    quota:
+      max_channels: 0
+      max_videos_per_channel: 0
+      max_comments_per_video: 0
+    transcript:
+      enabled: false
+      whisper_model: "medium"
+      max_videos: 0
+
+  reddit:
+    enabled: true
+    subreddits: ["smarthome", "homeautomation", "privacy", "cybersecurity"]
+    search_queries:
+      - "smart home privacy"
+      - "smart home hacking"
+      - "voice assistant privacy"
+    sort: "relevance"
+    time_filter: "all"
+    quota:
+      max_posts_per_query: 50
+      max_comments_per_post: 100
+
+  twitter:
+    enabled: false
+    api_key_env: "TWITTER_BEARER_TOKEN"
+    search_queries: []
+    search_operators: ""
+    quota:
+      max_results_per_query: 0
+      max_total_tweets: 0
+
+  linkedin:
+    enabled: false
+    api_key_env: "LINKEDIN_ACCESS_TOKEN"
+    search_queries: []
+    quota:
+      max_posts: 0
+
+validation:
+  enabled: false
+  references: []

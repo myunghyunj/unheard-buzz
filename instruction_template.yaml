@@ -12,6 +12,20 @@ project:
   description: "What market need or user pain point you're investigating"
 
 analysis:
+  # Drop very short comments before analysis
+  min_comment_words: 15
+
+  # Count only relevant posts in summary stats by default
+  include_irrelevant_in_stats: false
+
+  # Optional language filtering for collectors that expose language hints
+  # Example: ["en"] or ["en", "ko"]
+  language_allowlist: []
+
+  # Deduplicate near-identical normalized text across collectors
+  dedup_normalized_text: true
+  dedup_min_chars: 40
+
   # Words that mark a post as on-topic for your domain
   relevance_keywords:
     - "keyword1"
@@ -49,15 +63,24 @@ platforms:
     search_queries:
       - "your topic review"
       - "your topic problems"
-    priority_channels: []
+    priority_channels:
+      - handle: "@examplechannel"
+        name: "Example Channel"
     video_priority_keywords:
       - "review"
       - "problems"
       - "honest"
+      - "comparison"
+      - "experience"
     quota:
       max_channels: 20
       max_videos_per_channel: 8
       max_comments_per_video: 150
+    transcript:
+      enabled: false
+      whisper_model: "medium"
+      max_videos: 20
+      term_corrections: {}
 
   reddit:
     enabled: true

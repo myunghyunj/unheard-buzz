@@ -1,19 +1,16 @@
 """Reddit platform agent -- extracts posts and comments from subreddits.
 
-Uses Reddit's public JSON API (no OAuth required for public data).
-For each configured subreddit, searches with each query term, deduplicates
-results by post ID, then fetches and recursively traverses comment trees.
-
-All domain-specific configuration comes from the ``instruction`` parameter.
-Nothing is hardcoded.
+v3 collector patch:
+- normalized-text dedup across overlapping searches
+- heuristic language allowlist support
+- collector-level scoring in metadata
 """
 
 import logging
-import os
-import sys
 import time
+import re
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 import requests
 
@@ -21,31 +18,19 @@ from config import Instruction, SocialPost
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-HEADERS = {"User-Agent": "MarketNeedsAnalyzer/1.0 (research)"}
+HEADERS = {"User-Agent": "unheard-buzz/3.0 (research toolkit)"}
 _BASE_URL = "https://www.reddit.com"
-_REQUEST_DELAY = 1.0        # seconds between requests (Reddit ~60 req/min)
-_RETRY_DELAY = 60           # seconds to wait on 429
+_REQUEST_DELAY = 1.0
+_RETRY_DELAY = 60
 _MAX_RETRIES = 3
-_COMMENT_DEPTH_LIMIT = 10   # avoid infinite recursion on deeply nested threads
+_COMMENT_DEPTH_LIMIT = 10
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _rate_limit():
-    """Sleep to respect Reddit's rate limit."""
     time.sleep(_REQUEST_DELAY)
 
 
-def _get_json(url: str, params: Optional[dict] = None,
-              retries: int = _MAX_RETRIES) -> Optional[dict]:
-    """Fetch JSON from Reddit with retry on 429 and error handling."""
+def _get_json(url: str, params: Optional[dict] = None, retries: int = _MAX_RETRIES) -> Optional[dict]:
     for attempt in range(1, retries + 1):
         try:
             _rate_limit()
@@ -53,19 +38,12 @@ def _get_json(url: str, params: Optional[dict] = None,
 
             if resp.status_code == 429:
                 retry_after = int(resp.headers.get("Retry-After", _RETRY_DELAY))
-                logger.warning(
-                    "Rate-limited by Reddit (429). Retrying in %ds (attempt %d/%d).",
-                    retry_after, attempt, retries,
-                )
+                logger.warning("Rate-limited by Reddit (429). Retrying in %ds (attempt %d/%d).", retry_after, attempt, retries)
                 time.sleep(retry_after)
                 continue
-
             if resp.status_code == 403:
-                logger.warning(
-                    "Subreddit is private or quarantined (403): %s", url,
-                )
+                logger.warning("Subreddit is private or quarantined (403): %s", url)
                 return None
-
             if resp.status_code == 404:
                 logger.warning("Reddit resource not found (404): %s", url)
                 return None
@@ -83,16 +61,13 @@ def _get_json(url: str, params: Optional[dict] = None,
 
 
 def _epoch_to_iso(epoch: float) -> str:
-    """Convert a Unix epoch timestamp to ISO 8601 string."""
     try:
         return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
     except (ValueError, TypeError, OSError):
         return ""
 
 
-def _search_subreddit(subreddit: str, query: str, sort: str,
-                      time_filter: str, limit: int) -> List[dict]:
-    """Search a subreddit and return raw post data dicts."""
+def _search_subreddit(subreddit: str, query: str, sort: str, time_filter: str, limit: int) -> List[dict]:
     url = f"{_BASE_URL}/r/{subreddit}/search.json"
     params = {
         "q": query,
@@ -104,18 +79,11 @@ def _search_subreddit(subreddit: str, query: str, sort: str,
     data = _get_json(url, params=params)
     if data is None:
         return []
-
     children = data.get("data", {}).get("children", [])
     return [child.get("data", {}) for child in children if child.get("data")]
 
 
-def _traverse_comments(children: list, post_id: str, post_title: str,
-                       subreddit: str, depth: int = 0) -> List[SocialPost]:
-    """Recursively traverse Reddit's nested comment tree.
-
-    Reddit comments are nested: each comment can have a ``replies`` field
-    containing another listing of child comments.
-    """
+def _traverse_comments(children: list, post_id: str, post_title: str, subreddit: str, depth: int = 0) -> List[SocialPost]:
     posts = []
     if depth > _COMMENT_DEPTH_LIMIT:
         return posts
@@ -123,24 +91,19 @@ def _traverse_comments(children: list, post_id: str, post_title: str,
     for child in children:
         kind = child.get("kind", "")
         data = child.get("data", {})
-
-        # Skip non-comment nodes (e.g., "more" stubs)
         if kind != "t1":
             continue
 
         body = data.get("body", "")
         author = data.get("author", "[deleted]")
-
-        # Skip deleted or removed comments
         if author in ("[deleted]", "[removed]") or body in ("[deleted]", "[removed]"):
             continue
 
         comment_id = data.get("id", "")
         parent_raw = data.get("parent_id", "")
-        # parent_id comes as "t1_xxx" or "t3_xxx"; strip prefix
         parent_id = parent_raw.split("_", 1)[-1] if "_" in parent_raw else parent_raw
 
-        comment_post = SocialPost(
+        posts.append(SocialPost(
             post_id=f"reddit_comment_{comment_id}",
             platform="reddit",
             source_id=post_id,
@@ -155,50 +118,103 @@ def _traverse_comments(children: list, post_id: str, post_title: str,
             url=f"https://www.reddit.com{data.get('permalink', '')}",
             word_count=len(body.split()),
             metadata={"subreddit": subreddit, "depth": depth},
-        )
-        posts.append(comment_post)
+        ))
 
-        # Recurse into replies
         replies = data.get("replies")
         if isinstance(replies, dict):
             reply_children = replies.get("data", {}).get("children", [])
-            posts.extend(
-                _traverse_comments(reply_children, post_id, post_title,
-                                   subreddit, depth + 1)
-            )
+            posts.extend(_traverse_comments(reply_children, post_id, post_title, subreddit, depth + 1))
 
     return posts
 
 
-def _fetch_comments(subreddit: str, post_id: str, post_title: str,
-                    max_comments: int) -> List[SocialPost]:
-    """Fetch and parse comments for a single Reddit post."""
+def _fetch_comments(subreddit: str, post_id: str, post_title: str, max_comments: int) -> List[SocialPost]:
     url = f"{_BASE_URL}/r/{subreddit}/comments/{post_id}.json"
     params = {"limit": min(max_comments, 200)}
     data = _get_json(url, params=params)
     if data is None or not isinstance(data, list) or len(data) < 2:
         return []
-
-    # data[0] = post listing, data[1] = comment listing
     comment_listing = data[1].get("data", {}).get("children", [])
     return _traverse_comments(comment_listing, post_id, post_title, subreddit)
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+def _normalize_text_signature(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"https?://\S+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"[^a-z0-9가-힣\u0400-\u04FF\u3040-\u30ff\u4e00-\u9fff ]+", "", text)
+    return text.strip()
+
+
+def _guess_language(text: str) -> str:
+    sample = text[:500]
+    if re.search(r"[가-힣]", sample):
+        return "ko"
+    if re.search(r"[\u3040-\u30ff]", sample):
+        return "ja"
+    if re.search(r"[\u4e00-\u9fff]", sample):
+        return "zh"
+    if re.search(r"[\u0400-\u04FF]", sample):
+        return "ru"
+
+    lower = sample.lower()
+    if any(tok in lower for tok in (" the ", " and ", " is ", " are ", " with ")):
+        return "en"
+    return "unknown"
+
+
+def _collector_score(post: SocialPost, instruction: Instruction) -> float:
+    sig = _normalize_text_signature(post.text)
+    keyword_hits = 0
+    for kw in instruction.relevance_keywords:
+        if kw and kw.lower() in sig:
+            keyword_hits += 1
+
+    length_bonus = 1.0 if 40 <= len(sig) <= 400 else 0.0
+    engagement = min(post.like_count / 10.0, 5.0)
+    reply_bonus = 0.5 if post.is_reply else 1.0
+    score = keyword_hits * 1.5 + length_bonus + engagement + reply_bonus
+    return round(score, 3)
+
+
+def _language_allowed(lang: str, instruction: Instruction) -> bool:
+    allow = {x.lower() for x in getattr(instruction, "language_allowlist", [])}
+    if not allow:
+        return True
+    return lang in allow
+
+
+def _dedup_posts(posts: List[SocialPost], instruction: Instruction) -> Tuple[List[SocialPost], int]:
+    if not getattr(instruction, "dedup_normalized_text", True):
+        return posts, 0
+
+    seen_ids = set()
+    seen_signatures = set()
+    kept = []
+    removed = 0
+    min_chars = max(1, getattr(instruction, "dedup_min_chars", 40))
+
+    for post in posts:
+        if post.post_id in seen_ids:
+            removed += 1
+            continue
+        seen_ids.add(post.post_id)
+
+        signature = _normalize_text_signature(post.text)
+        if len(signature) >= min_chars:
+            sig_key = (post.platform, post.source_id, signature)
+            if sig_key in seen_signatures:
+                removed += 1
+                continue
+            seen_signatures.add(sig_key)
+            post.metadata["text_signature"] = signature[:120]
+
+        kept.append(post)
+
+    return kept, removed
+
 
 def run_reddit(instruction: Instruction) -> dict:
-    """Main entry point for the Reddit agent.
-
-    Searches configured subreddits with each query, deduplicates posts,
-    fetches comment trees, and returns unified SocialPost objects.
-
-    Returns:
-        dict with keys:
-            - posts: List[SocialPost] (both posts and comments)
-            - stats: dict with collection statistics
-    """
     cfg = instruction.reddit
     if not cfg.enabled:
         logger.info("Reddit is not enabled in instruction. Skipping.")
@@ -221,20 +237,18 @@ def run_reddit(instruction: Instruction) -> dict:
         "raw_posts_found": 0,
         "unique_posts": 0,
         "comments_collected": 0,
+        "lang_filtered": 0,
+        "duplicates_removed": 0,
         "errors": 0,
     }
 
-    # --- Phase 1: Search and deduplicate posts ---
     for subreddit in cfg.subreddits:
         stats["subreddits_searched"] += 1
         for query in cfg.search_queries:
             stats["queries_executed"] += 1
             logger.info("Searching r/%s for: %s", subreddit, query)
             try:
-                results = _search_subreddit(
-                    subreddit, query, cfg.sort, cfg.time_filter,
-                    cfg.max_posts_per_query,
-                )
+                results = _search_subreddit(subreddit, query, cfg.sort, cfg.time_filter, cfg.max_posts_per_query)
                 for post_data in results:
                     pid = post_data.get("id", "")
                     if pid and pid not in seen_post_ids:
@@ -247,12 +261,7 @@ def run_reddit(instruction: Instruction) -> dict:
                 stats["errors"] += 1
 
     stats["unique_posts"] = len(raw_posts)
-    logger.info(
-        "Reddit search complete: %d unique posts from %d raw results.",
-        len(raw_posts), stats["raw_posts_found"],
-    )
 
-    # --- Phase 2: Convert posts and fetch comments ---
     for post_data in raw_posts:
         pid = post_data.get("id", "")
         subreddit = post_data.get("_subreddit", post_data.get("subreddit", ""))
@@ -263,7 +272,6 @@ def run_reddit(instruction: Instruction) -> dict:
         if author in ("[deleted]", "[removed]"):
             continue
 
-        # Create the post SocialPost
         post_text = f"{title}\n\n{selftext}".strip() if selftext else title
         post_obj = SocialPost(
             post_id=f"reddit_post_{pid}",
@@ -281,29 +289,38 @@ def run_reddit(instruction: Instruction) -> dict:
             word_count=len(post_text.split()),
             metadata={"subreddit": subreddit},
         )
-        all_posts.append(post_obj)
 
-        # Fetch comments for this post
+        lang = _guess_language(post_obj.text)
+        if not _language_allowed(lang, instruction):
+            stats["lang_filtered"] += 1
+        else:
+            post_obj.metadata["language_guess"] = lang
+            post_obj.metadata["collector_score"] = _collector_score(post_obj, instruction)
+            all_posts.append(post_obj)
+
         num_comments = post_data.get("num_comments", 0)
         if num_comments > 0:
-            logger.info(
-                "Fetching comments for post %s (%d comments reported).",
-                pid, num_comments,
-            )
             try:
-                comments = _fetch_comments(
-                    subreddit, pid, title, cfg.max_comments_per_post,
-                )
-                all_posts.extend(comments)
+                comments = _fetch_comments(subreddit, pid, title, cfg.max_comments_per_post)
+                for comment in comments:
+                    lang = _guess_language(comment.text)
+                    if not _language_allowed(lang, instruction):
+                        stats["lang_filtered"] += 1
+                        continue
+                    comment.metadata["language_guess"] = lang
+                    comment.metadata["collector_score"] = _collector_score(comment, instruction)
+                    all_posts.append(comment)
                 stats["comments_collected"] += len(comments)
             except Exception as exc:
                 logger.error("Error fetching comments for post %s: %s", pid, exc)
                 stats["errors"] += 1
 
+    deduped_posts, duplicates_removed = _dedup_posts(all_posts, instruction)
+    stats["duplicates_removed"] = duplicates_removed
+
     logger.info(
-        "Reddit agent complete: %d total items (%d posts + %d comments), %d errors.",
-        len(all_posts), stats["unique_posts"],
-        stats["comments_collected"], stats["errors"],
+        "Reddit agent complete: %d total items after dedup (%d removed), %d lang-filtered, %d errors.",
+        len(deduped_posts), duplicates_removed, stats["lang_filtered"], stats["errors"],
     )
 
-    return {"posts": all_posts, "stats": stats}
+    return {"posts": deduped_posts, "stats": stats}

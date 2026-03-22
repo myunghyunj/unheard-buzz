@@ -115,8 +115,8 @@ Useful flags:
 |-------|-------------|----------------------|
 | 0 | Google Trends (pytrends) | Yes — pipeline continues |
 | 1 | Platform agents in parallel (YouTube, Reddit, Twitter, LinkedIn) | Yes — per platform |
-| 1b | Timeseries Insights API anomaly detection (if Google Cloud key set) | Yes — optional |
-| 2 | Unified analysis: filter, mark relevance, categorize | No — critical |
+| 2 | Unified analysis: filter, score relevance, categorize | No — critical |
+| 2b | Timeseries Insights API anomaly detection (if Google Cloud key set) | Yes — optional |
 | 3 | Report generation: CSV, JSON, Markdown | No — critical |
 | 4 | Validation against academic references (if enabled) | Yes — optional |
 
@@ -158,9 +158,9 @@ When summarizing for the user:
 
 - `.env.example` — expected environment variable names
 - `.env` — local-only, holds real secrets (gitignored)
-- `instruction_template.yaml` — starting point for new instruction files
+- `instruction_template.yaml` — starting point for new instruction files, including analysis quality controls
 - `input/linkedin_export.csv` — expected LinkedIn CSV import path
-- `examples/amputee.yaml` — fully worked example instruction
+- `examples/*.yaml` — worked example instructions for multiple markets
 
 ## When to open ARCHITECTURE.md
 
@@ -170,3 +170,10 @@ Use `ARCHITECTURE.md` for:
 - SocialPost schema and dataclass details
 - extension guidance for new platforms
 - known limitations and edge cases
+
+When results are noisy, tune these first before rewriting categories:
+- `analysis.min_comment_words`
+- `analysis.language_allowlist`
+- `analysis.dedup_normalized_text`
+- `analysis.dedup_min_chars`
+- `analysis.include_irrelevant_in_stats`

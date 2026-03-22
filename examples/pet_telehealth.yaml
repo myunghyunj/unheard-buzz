@@ -1,0 +1,95 @@
+project:
+  name: "Telehealth for Pets"
+  description: "Mining pet owners' experiences with veterinary telehealth services and virtual consultations"
+
+analysis:
+  min_comment_words: 15
+  include_irrelevant_in_stats: false
+  relevance_keywords:
+    - "telehealth"
+    - "telemedicine"
+    - "virtual vet"
+    - "online vet"
+    - "pet consultation"
+    - "veterinarian"
+    - "remote vet"
+  categories:
+    AC:
+      name: "Access & scheduling"
+      description: "Availability, scheduling, and wait-time issues"
+      keywords: ["access", "appointment", "schedule", "wait", "availability", "booking"]
+    DA:
+      name: "Diagnosis & quality of care"
+      description: "Diagnosis quality and treatment confidence"
+      keywords: ["diagnosis", "misdiagnosis", "quality of care", "treatment plan", "accurate"]
+    CO:
+      name: "Cost & insurance"
+      description: "Consultation fees and insurance issues"
+      keywords: ["cost", "expensive", "price", "fee", "insurance", "coverage"]
+    UX:
+      name: "User experience & technology"
+      description: "App usability and video call quality"
+      keywords: ["app", "video quality", "lag", "technical", "crash", "interface"]
+    SP:
+      name: "Specialist availability"
+      description: "Access to specialist expertise"
+      keywords: ["specialist", "dermatologist", "cardiologist", "expert"]
+    WI:
+      name: "Wish / improvements"
+      description: "Explicit improvement wishes"
+      keywords: ["wish", "hope", "want", "need", "improve"]
+  wish_patterns:
+    - "\\bwish\\b"
+    - "\\bhope\\b"
+    - "\\bwant\\b"
+    - "\\bneed\\b"
+    - "\\bimprove\\b"
+
+platforms:
+  youtube:
+    enabled: false
+    api_key_env: "YOUTUBE_API_KEY"
+    search_queries: []
+    priority_channels: []
+    video_priority_keywords: []
+    quota:
+      max_channels: 0
+      max_videos_per_channel: 0
+      max_comments_per_video: 0
+    transcript:
+      enabled: false
+      whisper_model: "medium"
+      max_videos: 0
+
+  reddit:
+    enabled: true
+    subreddits: ["pets", "dogs", "cats", "AskVet", "VetTech"]
+    search_queries:
+      - "telehealth vet"
+      - "online vet consultation"
+      - "remote vet appointment"
+    sort: "relevance"
+    time_filter: "all"
+    quota:
+      max_posts_per_query: 50
+      max_comments_per_post: 100
+
+  twitter:
+    enabled: false
+    api_key_env: "TWITTER_BEARER_TOKEN"
+    search_queries: []
+    search_operators: ""
+    quota:
+      max_results_per_query: 0
+      max_total_tweets: 0
+
+  linkedin:
+    enabled: false
+    api_key_env: "LINKEDIN_ACCESS_TOKEN"
+    search_queries: []
+    quota:
+      max_posts: 0
+
+validation:
+  enabled: false
+  references: []
