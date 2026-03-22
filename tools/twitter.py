@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 import requests
 
 from config import Instruction, SocialPost
+from language import guess_language, language_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,6 @@ def run_twitter(instruction: Instruction) -> dict:
 
     headers = _build_headers(token)
     all_posts: List[SocialPost] = []
-    allowed_langs = {x.lower() for x in getattr(instruction, "language_allowlist", [])}
     stats = {
         "queries_executed": 0,
         "tweets_collected": 0,
@@ -234,11 +234,14 @@ def run_twitter(instruction: Instruction) -> dict:
             )
 
             for tweet in raw_tweets:
-                tweet_lang = str(tweet.get("lang", "")).lower()
-                if allowed_langs and tweet_lang and tweet_lang not in allowed_langs:
+                tweet_lang = str(tweet.get("lang", "")).lower() or guess_language(
+                    str(tweet.get("text", ""))
+                )
+                if not language_allowed(tweet_lang, instruction.language_allowlist):
                     stats["lang_filtered"] += 1
                     continue
                 post = _tweet_to_socialpost(tweet)
+                post.metadata["language_guess"] = tweet_lang
                 all_posts.append(post)
                 stats["tweets_collected"] += 1
 

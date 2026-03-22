@@ -96,7 +96,9 @@ def generate_summary_stats(posts: List[SocialPost], instruction: Instruction, ou
             "post_id": top.post_id,
             "platform": top.platform,
             "score": compute_final_rank_score(top),
-            "text_preview": top.text[:180] + ("..." if len(top.text) > 180 else ""),
+            "source_title": top.source_title,
+            "text_excerpt": top.text[:280] + ("..." if len(top.text) > 280 else ""),
+            "count": global_cats.get(cat, 0),
         }
 
     stats = {
@@ -169,15 +171,23 @@ def generate_summary_report(stats: dict, instruction: Instruction, output_dir: s
 
     exemplars = stats.get("category_exemplars", {})
     if exemplars:
-        lines.append("## Category Exemplars")
-        lines.append("")
-        for code, info in exemplars.items():
+        for code, count in stats["category_rankings"]:
+            info = exemplars.get(code)
+            if not info:
+                continue
             cat_name = instruction.categories.get(code, {}).get("name", code)
             lines.append(f"### {code} — {cat_name}")
             lines.append("")
-            lines.append(f"- Platform: **{info['platform']}**")
-            lines.append(f"- Final score: **{info['score']}**")
-            lines.append(f"- Quote preview: {info['text_preview']}")
+            lines.append(f"Count: {count}")
+            lines.append("")
+            lines.append("Representative post:")
+            lines.append(f"> {info['text_excerpt']}")
+            lines.append("")
+            lines.append(
+                f"*Platform: {info['platform'].capitalize()} | "
+                f"Final score: {info['score']} | "
+                f"Source: {info['source_title'] or 'n/a'}*"
+            )
             lines.append("")
 
     lines.append("## Platform Breakdown")
