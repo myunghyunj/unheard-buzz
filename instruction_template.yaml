@@ -1,0 +1,99 @@
+# ============================================================================
+# unheard-buzz — Instruction Template
+# ============================================================================
+# Define your market-needs analysis. The agent will generate this for you
+# during the interview (Stage 1), but you can also write it manually.
+#
+# Usage: python tools/run.py --instruction your_file.yaml
+# ============================================================================
+
+project:
+  name: "Your Project Name"
+  description: "What market need or user pain point you're investigating"
+
+analysis:
+  # Words that mark a post as on-topic for your domain
+  relevance_keywords:
+    - "keyword1"
+    - "keyword2"
+
+  # Categories for classifying complaints/needs (5-15 recommended)
+  categories:
+    CAT1:
+      name: "Category Name"
+      description: "What this captures"
+      keywords: ["keyword_a", "keyword_b"]
+    CAT2:
+      name: "Another Category"
+      description: "Description"
+      keywords: ["keyword_c", "keyword_d"]
+
+  # Patterns that flag posts expressing improvement desires
+  wish_patterns:
+    - "\\bwish\\b"
+    - "\\bhope\\b"
+    - "\\bwant\\b"
+    - "\\bneed\\b"
+    - "\\bif only\\b"
+    - "\\bwould be nice\\b"
+    - "\\bshould be\\b"
+    - "\\bimprove\\b"
+
+# --- Platforms ---
+# Enable the ones you have API access to.
+
+platforms:
+  youtube:
+    enabled: true
+    api_key_env: "YOUTUBE_API_KEY"
+    search_queries:
+      - "your topic review"
+      - "your topic problems"
+    priority_channels: []
+    video_priority_keywords:
+      - "review"
+      - "problems"
+      - "honest"
+    quota:
+      max_channels: 20
+      max_videos_per_channel: 8
+      max_comments_per_video: 150
+
+  reddit:
+    enabled: true
+    subreddits:
+      - "relevant_subreddit"
+    search_queries:
+      - "your topic discussion"
+    sort: "relevance"
+    time_filter: "year"
+    quota:
+      max_posts_per_query: 50
+      max_comments_per_post: 100
+
+  twitter:
+    enabled: false
+    api_key_env: "TWITTER_BEARER_TOKEN"
+    search_queries:
+      - "your topic"
+      - "#relevant_hashtag"
+    search_operators: "-is:retweet lang:en"
+    quota:
+      max_results_per_query: 100
+      max_total_tweets: 500
+
+  linkedin:
+    enabled: false
+    api_key_env: "LINKEDIN_ACCESS_TOKEN"
+    search_queries: []
+    quota:
+      max_posts: 50
+
+# --- Validation (optional) ---
+validation:
+  enabled: false
+  references:
+    - name: "Author et al. 2024"
+      title: "Study title"
+      key_findings:
+        CAT1: "Finding about CAT1"

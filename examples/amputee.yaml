@@ -1,0 +1,207 @@
+# ============================================================================
+# Example: Amputee Prosthetic Unmet Needs — Multi-Platform
+# ============================================================================
+
+project:
+  name: "Amputee Prosthetic Unmet Needs"
+  description: "Mining patient-voice data across social platforms to identify unmet prosthetic needs"
+
+analysis:
+  relevance_keywords:
+    - "prosthetic"
+    - "prosthesis"
+    - "amputee"
+    - "amputation"
+    - "socket"
+    - "liner"
+    - "stump"
+    - "residual limb"
+    - "artificial leg"
+    - "artificial arm"
+    - "phantom pain"
+    - "myoelectric"
+    - "body-powered"
+    - "osseointegration"
+    - "prosthetist"
+    - "bionic"
+    - "C-Leg"
+    - "Genium"
+    - "Hero Arm"
+    - "i-Limb"
+    - "Ottobock"
+
+  categories:
+    SF:
+      name: "Socket fit / volume"
+      description: "Volume fluctuation, loose/tight socket, sock ply management"
+      keywords: ["socket", "volume", "loose", "tight", "pistoning", "fitting", "alignment", "suction", "doesn't fit"]
+    PM:
+      name: "Pain (mechanical)"
+      description: "Socket pressure, bone pain, skin-socket interface pain"
+      keywords: ["pressure point", "bone pain", "sore", "painful", "hurts", "rubbing", "uncomfortable", "sharp pain"]
+    PP:
+      name: "Phantom pain"
+      description: "Phantom limb pain, phantom sensation, neuroma"
+      keywords: ["phantom pain", "phantom limb", "neuroma", "nerve pain", "mirror therapy", "tingling"]
+    HS:
+      name: "Heat / sweat"
+      description: "Thermal discomfort, perspiration in liner/socket"
+      keywords: ["sweat", "sweating", "hot", "heat", "summer", "sauna", "moisture", "overheating"]
+    SK:
+      name: "Skin / hygiene"
+      description: "Rash, blister, skin breakdown, odor"
+      keywords: ["rash", "blister", "skin breakdown", "ulcer", "infection", "hygiene", "odor", "smell"]
+    MG:
+      name: "Mobility / gait / falls"
+      description: "Balance, stairs, uneven terrain, falling"
+      keywords: ["balance", "fall", "falling", "stairs", "slope", "uneven", "gait", "limp", "exhausting"]
+    AC:
+      name: "Access / cost"
+      description: "Insurance denial, cost, prosthetist access"
+      keywords: ["insurance", "denied", "cost", "expensive", "afford", "K-level", "prosthetist", "coverage"]
+    DD:
+      name: "Don / doff"
+      description: "Difficulty putting on/taking off prosthesis"
+      keywords: ["put on", "putting on", "take off", "donning", "doffing", "morning routine"]
+    EP:
+      name: "Emotional / psychological"
+      description: "Depression, anxiety, body image"
+      keywords: ["depression", "anxiety", "body image", "self-conscious", "frustrated", "grief", "mental health"]
+    WD:
+      name: "Weight / durability"
+      description: "Device weight, breakage, battery life, waterproofing"
+      keywords: ["heavy", "weight", "broke", "broken", "battery", "waterproof", "repair", "durability"]
+    CT:
+      name: "Control (upper limb)"
+      description: "Grip instability, EMG issues, cognitive load"
+      keywords: ["grip", "grasp", "control", "EMG", "electrode", "myoelectric", "calibration"]
+    AL:
+      name: "Activity limitation"
+      description: "Can't do specific activities"
+      keywords: ["can't swim", "swimming", "shower", "running", "cycling", "driving", "cooking", "sport"]
+    SV:
+      name: "Service / training"
+      description: "Lack of training, no rehab support"
+      keywords: ["training", "rehab", "no support", "nobody taught", "figure it out"]
+    WI:
+      name: "Wish / future desire"
+      description: "Explicit improvement wishes"
+      keywords: ["wish", "hope", "want", "dream", "if only", "should be", "improve", "future"]
+
+  wish_patterns:
+    - "\\bwish\\b"
+    - "\\bhope\\b"
+    - "\\bwant\\b"
+    - "\\bneed\\b"
+    - "\\bif only\\b"
+    - "\\bwould be nice\\b"
+    - "\\bshould be\\b"
+    - "\\bimprove\\b"
+
+platforms:
+
+  youtube:
+    enabled: true
+    api_key_env: "YOUTUBE_API_KEY"
+    search_queries:
+      - "amputee daily life prosthetic"
+      - "below knee amputee vlog"
+      - "above knee amputee prosthetic leg"
+      - "prosthetic socket problems tips"
+      - "prosthetic leg honest review"
+      - "bionic hand daily life review"
+      - "osseointegration patient experience"
+    priority_channels:
+      - handle: "@FootlessJo"
+        name: "Footless Jo"
+      - handle: "@Crew9t"
+        name: "Crew9t"
+      - handle: "@ampulife"
+        name: "Ampulife"
+      - handle: "@TillyLockey"
+        name: "Tilly Lockey"
+      - handle: "@ArmDynamics"
+        name: "Arm Dynamics"
+    video_priority_keywords:
+      - "socket"
+      - "pain"
+      - "sweat"
+      - "problems"
+      - "review"
+      - "comparison"
+      - "day in the life"
+      - "Q&A"
+      - "phantom"
+      - "insurance"
+    quota:
+      max_channels: 20
+      max_videos_per_channel: 8
+      max_comments_per_video: 150
+    transcript:
+      enabled: false
+      whisper_model: "medium"
+      max_videos: 30
+
+  reddit:
+    enabled: true
+    subreddits:
+      - "amputee"
+      - "prosthetics"
+      - "disability"
+      - "Osseointegration"
+    search_queries:
+      - "prosthetic socket problems"
+      - "amputee daily life"
+      - "prosthetic leg review"
+      - "phantom pain treatment"
+      - "prosthetic cost insurance"
+      - "bionic arm experience"
+    sort: "relevance"
+    time_filter: "all"
+    quota:
+      max_posts_per_query: 50
+      max_comments_per_post: 100
+
+  twitter:
+    enabled: false
+    api_key_env: "TWITTER_BEARER_TOKEN"
+    search_queries:
+      - "prosthetic leg"
+      - "amputee life"
+      - "#amputee"
+      - "#prosthetics"
+      - "phantom pain prosthetic"
+    search_operators: "-is:retweet lang:en min_replies:1"
+    quota:
+      max_results_per_query: 100
+      max_total_tweets: 500
+
+  linkedin:
+    enabled: false
+    api_key_env: "LINKEDIN_ACCESS_TOKEN"
+    search_queries:
+      - "prosthetic innovation"
+      - "amputee rehabilitation"
+    quota:
+      max_posts: 50
+
+validation:
+  enabled: true
+  references:
+    - name: "Turner & McGregor 2020"
+      title: "Socket fit as primary factor affecting rehabilitation"
+      key_findings:
+        SF: "48% amputees, 66% clinicians rate socket fit as #1"
+        PM: "Pain widely reported as barrier"
+    - name: "Manz et al. 2022"
+      title: "Lower limb systematic review (N=8149)"
+      top_categories: ["SF", "PM", "MG", "EP", "AC"]
+    - name: "Cordella et al. 2016"
+      title: "Upper limb prosthesis requirements"
+      key_findings:
+        CT: "Grasp stability and control major concern"
+    - name: "Salminger et al. 2023"
+      title: "Upper limb focus groups"
+      key_findings:
+        WD: "Reliability > appearance preference"
+        AC: "Cost criticism widespread"
