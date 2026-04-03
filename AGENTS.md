@@ -19,6 +19,21 @@ Help users discover unmet market needs by mining social media platforms and summ
 5. Read the generated reports in `output/`.
 6. Summarize findings with real user quotes first, then patterns and next steps.
 
+## Parallel agent posture
+
+Once the brief is clear, prefer a small parallel swarm instead of a single monolithic agent.
+
+- `search` agent: expand channels, subreddits, search phrases, and external benchmark checks
+- `analysis` agent: inspect `summary_stats.json`, coded exports, checkpoints, and platform differences
+- `writing` agent: draft the user-facing memo with quotes first, then rankings and next steps
+- `graphics` agent: create charts in `output/visualizations/` from the generated artifacts and export `svg` plus `png`, with `ai` when Illustrator editing is part of the workflow
+
+Keep one orchestrator agent responsible for `instruction.yaml`, `.env`, pipeline execution, and final synthesis.
+Start the graphics pass only after the phase 3 outputs exist.
+Use the graphics agent for bar charts, pie or donut charts, Sankey diagrams, bivariate choropleths, and word clouds when the data supports them.
+Keep the repo guidance general, but leave one concrete example starter in place.
+Benchmark Sankey work against the Google Charts Sankey reference and the repo starter in `examples/visualization_starters/google_sankey_template.html`.
+
 ## Stage 1 - Interview
 
 Collect these inputs conversationally:
@@ -108,6 +123,7 @@ Primary outputs:
 - `output/summary_stats.json`
 - `output/all_posts.csv`
 - `output/validation_report.md` when validation is enabled
+- `output/visualizations/` when a graphics agent produces charts, including `svg` and `png` exports and optional `ai` masters
 
 Checkpoint artifacts:
 
@@ -146,6 +162,13 @@ Read `docs/ARCHITECTURE.md` when you need:
 - schema and dataclass details
 - extension guidance for new platforms
 - known limitations and edge cases
+
+Read `docs/GRAPHICS_AGENT.md` when you need:
+
+- chart-selection guidance
+- Sankey-specific configuration notes
+- styling rules for presentation-ready visuals
+- output conventions for `output/visualizations/`
 
 Keep this file focused on operation.
 Keep deep internals in `docs/ARCHITECTURE.md`.

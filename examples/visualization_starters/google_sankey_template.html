@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>General Sankey Starter</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap');
+
+    :root {
+      --bg: #f5f1ea;
+      --surface: #fffdf9;
+      --border: rgba(63, 51, 37, 0.12);
+      --text: #2b241b;
+      --muted: #6a6259;
+      --shadow: 0 24px 60px rgba(48, 38, 27, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 36px;
+      background:
+        radial-gradient(circle at top left, rgba(127, 119, 221, 0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(29, 158, 117, 0.12), transparent 24%),
+        var(--bg);
+      color: var(--text);
+      font-family: "IBM Plex Sans", sans-serif;
+    }
+
+    .frame {
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 34px 34px 24px;
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "Newsreader", serif;
+      font-size: clamp(34px, 4vw, 52px);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .subhead {
+      margin: 10px 0 0;
+      max-width: 980px;
+      font-size: 16px;
+      color: var(--muted);
+    }
+
+    .stages {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 24px 0 18px;
+    }
+
+    .stage {
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    #chart {
+      width: 100%;
+      min-height: 700px;
+    }
+
+    .footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: 8px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Graphics Agent Starter</p>
+    <h1>Flow Story Title</h1>
+    <p class="subhead">
+      Replace the sample rows, copy, and source note with run-specific values. This starter is general by design and includes a prosthetics-funnel sample only as one concrete example. Use it to benchmark the graphics agent against a cleaner editorial Sankey style rather than the Google Charts defaults.
+    </p>
+
+    <div class="stages">
+      <div class="stage" style="background:#7f77dd;">Etiology</div>
+      <div class="stage" style="background:#444441;">Prevalence</div>
+      <div class="stage" style="background:#5f5e5a;">Candidacy</div>
+      <div class="stage" style="background:#1d9e75;">Fitting</div>
+      <div class="stage" style="background:#0f6e56;">Retention</div>
+      <div class="stage" style="background:#ba7517;">Limb type</div>
+    </div>
+
+    <div id="chart" aria-label="Sankey chart example"></div>
+
+    <div class="footer">
+      <div>Sources: Replace with the sources used for your run. Add units directly in the subtitle if values are not raw counts.</div>
+      <div>Starter: General template with prosthetics sample rows</div>
+    </div>
+  </div>
+
+  <script>
+    google.charts.load('current', { packages: ['sankey'] });
+    google.charts.setOnLoadCallback(drawChart);
+
+    const rows = [
+      ['Congenital limb difference', 'Total limb loss & difference', 3400],
+      ['Diabetes & vascular', 'Total limb loss & difference', 1250],
+      ['Trauma', 'Total limb loss & difference', 920],
+      ['Cancer & other', 'Total limb loss & difference', 130],
+      ['Total limb loss & difference', 'Non-candidates', 4100],
+      ['Total limb loss & difference', 'Prosthetic candidates', 1600],
+      ['Prosthetic candidates', 'Fitted with prosthesis', 1100],
+      ['Prosthetic candidates', 'Never fitted', 500],
+      ['Fitted with prosthesis', 'Retained users', 690],
+      ['Fitted with prosthesis', 'Abandoned', 410],
+      ['Retained users', 'Lower limb retained', 520],
+      ['Retained users', 'Upper limb retained', 170]
+    ];
+
+    const nodeColors = [
+      '#7f77dd',
+      '#e24b4a',
+      '#378add',
+      '#888780',
+      '#444441',
+      '#d3d1c7',
+      '#5f5e5a',
+      '#b4b2a9',
+      '#1d9e75',
+      '#d85a30',
+      '#0f6e56',
+      '#0f6e56',
+      '#ba7517'
+    ];
+
+    function drawChart() {
+      const data = new google.visualization.DataTable();
+      data.addColumn('string', 'From');
+      data.addColumn('string', 'To');
+      data.addColumn('number', 'Weight');
+      data.addRows(rows);
+
+      const options = {
+        height: 700,
+        backgroundColor: 'transparent',
+        tooltip: {
+          isHtml: true,
+          textStyle: {
+            color: '#2b241b',
+            fontName: 'IBM Plex Sans',
+            fontSize: 13
+          }
+        },
+        sankey: {
+          iterations: 64,
+          link: {
+            colorMode: 'gradient',
+            color: {
+              fillOpacity: 0.45
+            }
+          },
+          node: {
+            width: 22,
+            nodePadding: 28,
+            labelPadding: 18,
+            colors: nodeColors,
+            label: {
+              fontName: 'IBM Plex Sans',
+              fontSize: 14,
+              color: '#30291f',
+              bold: false,
+              italic: false
+            }
+          }
+        }
+      };
+
+      const chart = new google.visualization.Sankey(document.getElementById('chart'));
+      chart.draw(data, options);
+    }
+
+    window.addEventListener('resize', drawChart);
+  </script>
+</body>
+</html>

@@ -7,7 +7,7 @@ The idea is simple:
 - 🧠 the LLM handles planning, interviewing, and orchestration
 - 🖥️ your local machine handles API calls, retries, checkpoints, files, and long-running work
 
-That split matters. Chat-only environments are often weak at filesystem access, internet access, long jobs, and recovery after partial failures. This repo is designed to run on your own machine so the agent can stay conversational while the actual collection and reporting happen locally. **Note that parallel agents may consume rate limits exponentially.**
+That split matters. Chat-only environments are often weak at filesystem access, internet access, long jobs, and recovery after partial failures. This repo is designed to run on your own machine so the agent can stay conversational while the actual collection and reporting happen locally. **Note that parallel collectors may consume rate limits exponentially, so post-run parallel agents should reuse shared artifacts instead of recollecting data.**
 
 ## What this helps you do 🔍
 
@@ -119,6 +119,24 @@ Good prompts usually include:
 - 📡 which platforms you want to search
 - 🔑 whether you already have API keys
 - 🗂️ whether you want the agent to generate categories for you
+
+If you already know you want a multi-agent workflow, say so explicitly. For example:
+
+- `Run the research, then split into parallel search, analysis, writing, and graphics agents.`
+- `After the pipeline finishes, have a graphics agent make a bar chart and a Sankey if the data supports it.`
+
+## Parallel agent pattern 🧩
+
+This repo works especially well with a small agent swarm after the research brief is clear and the pipeline outputs exist.
+
+- `search` agent: expands subreddits, channels, queries, benchmarks, and external context
+- `analysis` agent: inspects `summary_stats.json`, coded exports, and checkpoints to quantify patterns
+- `writing` agent: turns the evidence into a quote-first memo, summary, or deck narrative
+- `graphics` agent: turns the same evidence into clean visuals under `output/visualizations/`, with static `svg` and `png` exports and an editable `ai` master when needed
+
+The Python pipeline is still the execution backbone. The parallel agents are best used after collection and report generation so they can work from the same artifacts instead of competing for API quota.
+
+For graphics work, keep the repo guidance general but leave one concrete example in place. Benchmark Sankey diagrams against the Google Charts Sankey reference and the repo's starter template in `examples/visualization_starters/google_sankey_template.html`. That starter is generic by design and ships with a prosthetics-funnel example dataset. More chart guidance lives in `docs/GRAPHICS_AGENT.md`.
 
 ## API keys: what you need and where to get them 🔑
 
@@ -326,18 +344,25 @@ Typical outputs include:
 - 📊 `summary_stats.json`
 - 📄 `validation_report.md`
 - 📄 `tsi_anomaly_report.md` when the optional TSI step is enabled
+- 🎨 `visualizations/*.html`
+- 🎨 `visualizations/*.svg`
+- 🎨 `visualizations/*.png`
+- 🎨 `visualizations/*.ai` when an editable Illustrator master is part of the handoff
+
+The `visualizations/` artifacts are optional post-processing outputs produced by a graphics agent after the core pipeline completes. When graphics are created, prefer shipping both `svg` and `png`; keep `ai` alongside them when Illustrator is used for the final polish.
 
 These are designed to be easy to inspect, share, and move into research notes, client memos, or slides.
 
 ## Sample visualization 📈
 
 Below is a static preview from the amputee sample-output bundle.
-The interactive HTML version was visualized via Claude after the pipeline results were retrieved.
+The interactive HTML version was visualized after the pipeline results were retrieved, which is the same post-run handoff the dedicated graphics agent should follow.
 
 ![Amputee wish intensity donut](examples/amputee_sample_output/visualizations/wish_intensity_donut_clean.svg)
 
 - A static preview is embedded above for quick scanning in the repo.
 - The sample bundle also includes an interactive HTML version of the same chart.
+- Additional chart guidance and a reusable generic Sankey starter with a concrete prosthetics example live in `docs/GRAPHICS_AGENT.md` and `examples/visualization_starters/`.
 
 ## Example topics 🗂️
 
@@ -354,7 +379,7 @@ Included examples cover:
 - 🐝 urban beekeeping
 - 🍞 sourdough baking
 
-There is also a packaged sample-output bundle for the amputee brief, including reports, coded exports, registries, checkpoints, and a standalone visualization.
+There is also a packaged sample-output bundle for the amputee brief, including reports, coded exports, registries, checkpoints, and a standalone visualization. The `examples/visualization_starters/` folder holds reusable chart scaffolds for the graphics agent.
 
 ## Operational notes ⚠️
 
@@ -380,6 +405,7 @@ It already does a few things well:
 - ⚙️ configurable category and segment schemas
 - 🎯 relevance and category scoring
 - 📝 report generation for summaries, quotes, stats, and coded exports
+- 🎨 post-run visualization handoff for graphics-agent charting
 - 🗂️ source and YouTube registry generation for auditability
 - 💾 checkpoint-aware execution
 
@@ -406,7 +432,8 @@ unheard-buzz/
 ├── CLAUDE.md
 ├── docs/
 │   ├── README.md
-│   └── ARCHITECTURE.md
+│   ├── ARCHITECTURE.md
+│   └── GRAPHICS_AGENT.md
 ├── .github/
 │   ├── CONTRIBUTING.md
 │   ├── SECURITY.md
@@ -414,6 +441,7 @@ unheard-buzz/
 │   └── workflows/
 ├── instruction_template.yaml
 ├── examples/
+│   └── visualization_starters/
 ├── tools/
 ├── tests/
 ├── input/

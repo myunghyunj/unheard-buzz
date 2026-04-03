@@ -19,6 +19,21 @@ Help users discover unmet market needs by mining social media platforms and summ
 5. Read the generated reports in `output/`.
 6. Summarize findings with real user quotes first, then patterns and next steps.
 
+## Parallel-agent posture
+
+Once the brief is stable, prefer a small parallel swarm instead of one giant thread.
+
+- `search` agent: expand channels, subreddits, queries, and external benchmark checks
+- `analysis` agent: inspect `summary_stats.json`, coded exports, checkpoints, and platform contrasts
+- `writing` agent: draft the user-facing memo with quotes first, then patterns and next steps
+- `graphics` agent: create charts in `output/visualizations/` from the generated artifacts and export `svg` plus `png`, with `ai` when Illustrator editing is part of the workflow
+
+Keep one orchestrator agent responsible for `instruction.yaml`, `.env`, pipeline execution, and final synthesis.
+Run the graphics pass only after phase 3 outputs exist so it can work from shared artifacts instead of recollecting data.
+Use the graphics agent for bar charts, pies or donuts, Sankey diagrams, bivariate choropleths, and word clouds when the data supports them.
+Keep the repo guidance general, but leave one concrete example starter in place.
+Benchmark Sankey work against the Google Charts Sankey reference and the repo starter in `examples/visualization_starters/google_sankey_template.html`.
+
 ## Stage 1 — Interview
 
 Collect these inputs conversationally. Ask one question at a time. If the user is unsure, generate sensible defaults and keep moving.
@@ -120,6 +135,8 @@ Useful flags:
 | 3 | Report generation: CSV, JSON, Markdown | No — critical |
 | 4 | Validation against academic references (if enabled) | Yes — optional |
 
+After phase 3, the `analysis`, `writing`, and `graphics` agents can work in parallel from the same output artifacts.
+
 ## What to inspect after a run
 
 Primary outputs:
@@ -130,6 +147,7 @@ Primary outputs:
 - `output/summary_stats.json` — machine-readable statistics
 - `output/all_posts.csv` — every post collected (anonymized)
 - `output/validation_report.md` — academic cross-reference (if enabled)
+- `output/visualizations/` — optional graphics-agent charts, including `svg` and `png` exports and optional `ai` masters
 
 Checkpoints: `output/checkpoints/phase*.json`
 
@@ -170,6 +188,12 @@ Use `docs/ARCHITECTURE.md` for:
 - SocialPost schema and dataclass details
 - extension guidance for new platforms
 - known limitations and edge cases
+
+Use `docs/GRAPHICS_AGENT.md` for:
+- chart-selection guidance
+- Sankey configuration notes
+- styling expectations for presentation-ready visuals
+- `output/visualizations/` conventions
 
 When results are noisy, tune these first before rewriting categories:
 - `analysis.min_comment_words`

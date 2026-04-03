@@ -10,6 +10,7 @@ Those files stay at the root intentionally so agent tools can discover them auto
 Everything else is grouped by purpose:
 
 - `docs/ARCHITECTURE.md` — deep technical reference, data flow, extension notes
+- `docs/GRAPHICS_AGENT.md` — chart-selection and styling guide for the graphics agent
 - `.github/CONTRIBUTING.md` — contributor workflow
 - `.github/SECURITY.md` — security policy
 - `.github/CODE_OF_CONDUCT.md` — community expectations

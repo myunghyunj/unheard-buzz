@@ -33,6 +33,23 @@ tools/run.py -> run_pipeline()
               `- validation_report.md
 ```
 
+## Agent orchestration layer
+
+The Python pipeline is the shared execution backbone.
+After phase 3 outputs exist, repo-aware agents are expected to branch into parallel interpretation and presentation work.
+
+```text
+phase 3 output artifacts
+      |
+      +--> search agent -> benchmark lookups, query expansion notes, market context
+      +--> analysis agent -> ranked findings, platform deltas, quantitative tables
+      +--> writing agent -> brief, memo, summary, or deck-ready narrative
+      `--> graphics agent -> output/visualizations/*.html|*.svg|*.png|*.ai
+```
+
+This orchestration layer is a runtime pattern, not a first-class Python module.
+The graphics pass should be treated as post-processing over shared outputs, not as another collector.
+
 ## Core configuration model
 
 `tools/config.py` defines the typed configuration layer:
@@ -134,6 +151,29 @@ Order of operations:
 8. write `summary_report.md`
 9. optionally write `validation_report.md`
 
+### Phase 3b - Optional graphics handoff
+
+Not yet implemented as a Python module.
+This is an agent-driven post-processing step that turns the generated outputs into charts and static presentation assets.
+
+Typical inputs:
+
+- `summary_stats.json`
+- `all_posts.csv`
+- `coded_posts.csv` or `coded_comments.csv`
+- `summary_report.md`
+- `quotable_excerpts.md`
+- `trend_report.md`
+
+Typical outputs:
+
+- `output/visualizations/*.html`
+- `output/visualizations/*.svg`
+- `output/visualizations/*.png`
+- `output/visualizations/*.ai` when an editable Illustrator master is needed
+
+See `docs/GRAPHICS_AGENT.md` for chart selection and styling conventions.
+
 ### Phase 4 - Validation
 
 Validation is lightweight.
@@ -189,6 +229,7 @@ It compares detected category rankings against the user-provided references in `
 - TSI anomaly quality depends on timestamp coverage and category labeling quality
 - Quote selection favors relevant, high-scoring, category-covering posts; it is heuristic, not model-based
 - Validation is comparison against user-supplied references, not independent academic retrieval
+- There is no dedicated visualization generator in the Python pipeline yet; presentation charts are currently produced by agents from the saved outputs
 
 ## Error handling patterns
 
