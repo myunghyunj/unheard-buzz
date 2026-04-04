@@ -11,6 +11,7 @@ from collections import defaultdict
 from typing import Dict, List
 
 from config import Instruction, SocialPost, MIN_COMMENT_WORDS
+from issue_intelligence import build_issue_intelligence
 
 
 _SPAM_PATTERNS = [
@@ -46,6 +47,9 @@ def _score_from_hits(hit_count: int, keyword_count: int) -> float:
 
 
 def compute_final_rank_score(post: SocialPost) -> float:
+    # Backward-compatible alias. Final ranking should be driven by issue-level scoring.
+    if getattr(post, "issue_priority_score", 0.0) > 0:
+        return round(float(post.issue_priority_score), 4)
     raw_collector = float(post.metadata.get("collector_score", 0.0) or 0.0)
     collector_score = min(1.0, max(0.0, raw_collector) / 8.0)
     relevance_score = min(max(post.relevance_score, 0.0), 1.0)
@@ -88,15 +92,22 @@ def filter_posts(posts: List[SocialPost], instruction: Instruction) -> List[Soci
     }
 
     filtered: List[SocialPost] = []
+    seen_exact = set()
 
     for post in posts:
         text = post.text.strip()
         words = text.split()
         word_count = len(words)
 
+        normalized = re.sub(r"\s+", " ", text.lower()).strip()
         if word_count < min_words:
             continue
         if _is_spam(text):
+            continue
+        if normalized in seen_exact:
+            continue
+        seen_exact.add(normalized)
+        if any(sig in normalized for sig in ("buy now", "limited offer", "sponsored", "thought leadership")):
             continue
 
         text_lower = text.lower()
@@ -146,9 +157,19 @@ def filter_posts(posts: List[SocialPost], instruction: Instruction) -> List[Soci
         post.categories = assigned_categories
         post.segment_scores = segment_scores
         post.segments = assigned_segments
-        post.final_rank_score = compute_final_rank_score(post)
         post.analysis_complete = True
         filtered.append(post)
+
+    issue_layer = build_issue_intelligence(filtered, instruction)
+    issue_by_id = {issue.canonical_issue_id: issue for issue in issue_layer["issues"]}
+    for post in filtered:
+        issue = issue_by_id.get(post.canonical_issue_id)
+        if issue:
+            post.final_rank_score = issue.priority_score
+            post.metadata["opportunity_score"] = issue.opportunity_score
+            post.metadata["confidence_score"] = issue.confidence_score
+            post.metadata["priority_score"] = issue.priority_score
+            post.metadata["final_rank_score_alias"] = issue.final_rank_score
 
     return filtered
 

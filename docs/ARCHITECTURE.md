@@ -257,3 +257,13 @@ If you are reviewing changes, the highest-leverage places are:
 - `tools/analyzer.py` for relevance and categorization changes
 - `tools/reports.py` for user-facing output integrity
 - platform modules for auth, rate-limit, and parsing edge cases
+
+
+## v4 Issue intelligence extensions
+
+- Added source policy/scoring/visualization config blocks in `instruction.yaml`.
+- Added optional Tier-1/2 evidence collectors: `tools/rss.py` and `tools/github_issues.py`.
+- Analyzer now keeps baseline filtering but appends an issue/evidence layer for canonical issue IDs and provenance-backed scoring (`opportunity_score`, `confidence_score`, `priority_score`).
+- `final_rank_score` is now a backward-compatible alias of issue priority.
+- Report phase still emits legacy CSV/Markdown artifacts, and now also emits `issue_registry.csv`, `evidence_registry.csv`, `dashboard_data.json`, and `source_registry_enriched.csv`.
+- Pipeline now includes **Phase 3b Visualizations** via `tools/visualizations.py` after report generation.

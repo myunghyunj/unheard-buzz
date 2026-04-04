@@ -24,6 +24,7 @@ from analyzer import (
     representative_posts_by_category,
 )
 from config import Instruction, SocialPost
+from issue_intelligence import build_issue_intelligence
 
 
 def clone_posts(posts: List[SocialPost]) -> List[SocialPost]:
@@ -234,6 +235,34 @@ def generate_source_registry(posts: List[SocialPost], output_dir: str) -> str:
         "top_categories",
     ]
     return _write_csv(os.path.join(output_dir, "source_registry.csv"), fieldnames, rows)
+
+
+def generate_enriched_source_registry(posts: List[SocialPost], output_dir: str) -> str:
+    rows = []
+    for post in posts:
+        rows.append(
+            {
+                "post_id": post.post_id,
+                "platform": post.platform,
+                "source_id": post.source_id,
+                "source_title": post.source_title,
+                "source_family": post.source_family,
+                "source_tier": post.source_tier,
+                "evidence_class": post.evidence_class,
+                "trust_weight": post.trust_weight,
+                "independence_key": post.independence_key,
+                "publication_date": post.publication_date or post.timestamp,
+                "url": post.url,
+            }
+        )
+    return _write_csv(
+        os.path.join(output_dir, "source_registry_enriched.csv"),
+        [
+            "post_id", "platform", "source_id", "source_title", "source_family", "source_tier",
+            "evidence_class", "trust_weight", "independence_key", "publication_date", "url",
+        ],
+        rows,
+    )
 
 
 def _youtube_channel_url(channel: dict) -> str:
@@ -558,6 +587,10 @@ def generate_summary_stats(
         "segments": _build_segment_stats(stats_posts, instruction),
         "category_exemplars": category_exemplars,
         "top_quotes": top_quotes or [],
+        "top_issues": [],
+        "score_breakdowns": {},
+        "evidence_counts": {},
+        "source_mix": dict(Counter((post.source_family or post.platform) for post in stats_posts)),
     }
 
     filepath = os.path.join(output_dir, "summary_stats.json")
@@ -668,6 +701,19 @@ def generate_summary_report(stats: dict, instruction: Instruction, output_dir: s
 
     lines.append("## Category Rankings")
     lines.append("")
+
+    if stats.get("top_issues"):
+        lines.append("## Top Issues (Impact vs Confidence)")
+        lines.append("")
+        lines.append("| Issue | Priority | Opportunity | Confidence | Evidence | Source families | Provenance |")
+        lines.append("|------|---------:|------------:|-----------:|---------:|----------------:|------------|")
+        for issue in stats.get("top_issues", [])[:10]:
+            lines.append(
+                f"| {issue['canonical_issue_id']} | {issue['priority_score']:.1f} | {issue['opportunity_score']:.1f} | "
+                f"{issue['confidence_score']:.1f} | {issue['evidence_count']} | {issue['source_family_count']} | "
+                f"{issue.get('provenance_snippet', 'n/a')} |"
+            )
+        lines.append("")
     lines.append("| Rank | Code | Category | Count | % Scope | % Wish |")
     lines.append("|-----:|:----:|----------|------:|--------:|-------:|")
     for item in stats.get("category_rankings", []):
@@ -981,7 +1027,62 @@ def generate_all(
     generated["all_posts_csv"] = generate_posts_csv(export_posts, output_dir)
     generated.update(generate_coded_posts_csv(export_posts, output_dir))
     generated["source_registry_csv"] = generate_source_registry(export_posts, output_dir)
+    generated["source_registry_enriched_csv"] = generate_enriched_source_registry(posts, output_dir)
     generated.update(generate_youtube_registries(collector_context or {}, posts, output_dir))
+
+    issue_layer = build_issue_intelligence(posts, instruction)
+    issue_rows = []
+    for issue in issue_layer["issues"]:
+        issue_rows.append(
+            {
+                "canonical_issue_id": issue.canonical_issue_id,
+                "normalized_problem_statement": issue.normalized_problem_statement,
+                "categories": "|".join(issue.category_codes),
+                "segments": "|".join(issue.segment_codes),
+                "evidence_count": issue.evidence_count,
+                "independent_source_count": issue.independent_source_count,
+                "source_family_count": issue.source_family_count,
+                "opportunity_score": issue.opportunity_score,
+                "confidence_score": issue.confidence_score,
+                "priority_score": issue.priority_score,
+                "final_rank_score": issue.final_rank_score,
+            }
+        )
+    generated["issue_registry_csv"] = _write_csv(
+        os.path.join(output_dir, "issue_registry.csv"),
+        list(issue_rows[0].keys()) if issue_rows else [
+            "canonical_issue_id", "normalized_problem_statement", "categories", "segments",
+            "evidence_count", "independent_source_count", "source_family_count",
+            "opportunity_score", "confidence_score", "priority_score", "final_rank_score",
+        ],
+        issue_rows,
+    )
+    evidence_rows = [
+        {
+            "evidence_id": e.evidence_id,
+            "post_id": e.post_id,
+            "canonical_issue_id": e.canonical_issue_id,
+            "source_family": e.source_family,
+            "source_tier": e.source_tier,
+            "evidence_class": e.evidence_class,
+            "trust_weight": e.trust_weight,
+            "publication_date": e.publication_date,
+            "independence_key": e.independence_key,
+            "platform": e.platform,
+            "url": e.url,
+            "excerpt": e.excerpt,
+        }
+        for e in issue_layer["evidence"]
+    ]
+    generated["evidence_registry_csv"] = _write_csv(
+        os.path.join(output_dir, "evidence_registry.csv"),
+        list(evidence_rows[0].keys()) if evidence_rows else [
+            "evidence_id", "post_id", "canonical_issue_id", "source_family", "source_tier",
+            "evidence_class", "trust_weight", "publication_date", "independence_key",
+            "platform", "url", "excerpt",
+        ],
+        evidence_rows,
+    )
 
     excerpts = select_quotable_excerpts(
         export_posts,
@@ -997,6 +1098,38 @@ def generate_all(
         collector_context=collector_context,
         top_quotes=excerpts,
     )
+    stats["top_issues"] = [
+        {
+            "canonical_issue_id": issue.canonical_issue_id,
+            "normalized_problem_statement": issue.normalized_problem_statement,
+            "priority_score": issue.priority_score,
+            "opportunity_score": issue.opportunity_score,
+            "confidence_score": issue.confidence_score,
+            "evidence_count": issue.evidence_count,
+            "independent_source_count": issue.independent_source_count,
+            "source_family_count": issue.source_family_count,
+            "provenance_snippet": (next((e.excerpt for e in issue_layer["evidence"] if e.canonical_issue_id == issue.canonical_issue_id), "")[:90]),
+        }
+        for issue in issue_layer["issues"][:10]
+    ]
+    stats["score_breakdowns"] = {
+        issue.canonical_issue_id: {
+            "opportunity": issue.opportunity_score,
+            "confidence": issue.confidence_score,
+            "priority": issue.priority_score,
+        }
+        for issue in issue_layer["issues"][:20]
+    }
+    stats["evidence_counts"] = dict(Counter(e.canonical_issue_id for e in issue_layer["evidence"]))
+    stats["independent_source_count"] = sum(issue.independent_source_count for issue in issue_layer["issues"][:10])
+    stats["source_family_count"] = len({e.source_family for e in issue_layer["evidence"]})
+    stats["freshness_score"] = round(sum((p.issue_confidence_score for p in posts)) / max(1, len(posts)), 2)
+    stats["dashboard_data"] = {"issues": stats["top_issues"], "source_mix": stats.get("source_mix", {})}
+    with open(os.path.join(output_dir, "summary_stats.json"), "w", encoding="utf-8") as handle:
+        json.dump(stats, handle, indent=2, ensure_ascii=False)
+    with open(os.path.join(output_dir, "dashboard_data.json"), "w", encoding="utf-8") as handle:
+        json.dump(stats["dashboard_data"], handle, indent=2, ensure_ascii=False)
+    generated["dashboard_data_json"] = os.path.join(output_dir, "dashboard_data.json")
     generated["summary_stats_json"] = os.path.join(output_dir, "summary_stats.json")
     generated["summary_report_md"] = generate_summary_report(stats, instruction, output_dir)
 

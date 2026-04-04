@@ -17,3 +17,14 @@ Suggested flow:
 2. Open the sample-output README inside `amputee_sample_output/` to see the packaged outputs.
 3. Inspect the reports, CSV exports, and checkpoints to understand the expected output shape.
 4. Adapt a visualization starter once you know which story the graphics agent should tell.
+
+
+## v4 Issue intelligence outputs
+
+New structured outputs are available in addition to legacy exports:
+- `issue_registry.csv`
+- `evidence_registry.csv`
+- `source_registry_enriched.csv`
+- `dashboard_data.json`
+- `output/visualizations/executive_dashboard.html`
+- `output/visualizations/analyst_drilldown.html`
