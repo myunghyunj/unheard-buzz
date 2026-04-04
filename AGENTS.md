@@ -172,3 +172,8 @@ Read `docs/GRAPHICS_AGENT.md` when you need:
 
 Keep this file focused on operation.
 Keep deep internals in `docs/ARCHITECTURE.md`.
+
+
+## v4 Operating update
+
+For consulting-grade issue intelligence runs, default to enabling RSS and GitHub Issues alongside social platforms when configured, and emphasize issue/evidence outputs (`issue_registry.csv`, `evidence_registry.csv`, dashboards) in final synthesis.

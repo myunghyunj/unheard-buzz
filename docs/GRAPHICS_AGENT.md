@@ -92,3 +92,21 @@ Aim for editorial quality rather than default chart output.
 6. Save an `ai` master too when Illustrator or another manual vector pass is part of the workflow.
 7. Export an interactive HTML version when practical.
 8. Hand the final assets back to the writing agent so captions and narrative stay aligned.
+
+
+## Consulting dashboard-first guidance (v4)
+
+Lead with executive and analyst dashboards, not donut/word-cloud-first deliverables.
+
+Required dashboard elements:
+- Top opportunity cards with priority + confidence + evidence count
+- Impact vs confidence comparison
+- Time trend where timestamp quality supports it
+- Source-mix bars and category x segment heatmap
+- Provenance tables with source family/tier
+
+Rules:
+- Keep frequency separate from confidence
+- Show source diversity and independent corroboration next to each top issue
+- Use Sankey only for true flow data
+- Pie/donut/word cloud can be optional support visuals, never lead visuals

@@ -58,6 +58,23 @@ class LinkedInConfig:
 
 
 @dataclass
+class RssConfig:
+    enabled: bool = False
+    feeds: List[dict] = field(default_factory=list)
+    max_items_per_feed: int = 50
+
+
+@dataclass
+class GitHubIssuesConfig:
+    enabled: bool = False
+    api_key_env: str = "GITHUB_TOKEN"
+    repos: List[str] = field(default_factory=list)
+    include_discussions: bool = True
+    include_releases: bool = True
+    max_items_per_repo: int = 50
+
+
+@dataclass
 class ReportingConfig:
     quote_count: int = 25
     max_cooccurrence_pairs: int = 15
@@ -89,11 +106,16 @@ class Instruction:
     dedup_normalized_text: bool = True
     dedup_min_chars: int = 40
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
+    source_policy: "SourcePolicyConfig" = field(default_factory=lambda: SourcePolicyConfig())
+    scoring: "ScoringConfig" = field(default_factory=lambda: ScoringConfig())
+    visualization: "VisualizationConfig" = field(default_factory=lambda: VisualizationConfig())
     # Platform configs
     youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
     reddit: RedditConfig = field(default_factory=RedditConfig)
     twitter: TwitterConfig = field(default_factory=TwitterConfig)
     linkedin: LinkedInConfig = field(default_factory=LinkedInConfig)
+    rss: RssConfig = field(default_factory=RssConfig)
+    github_issues: GitHubIssuesConfig = field(default_factory=GitHubIssuesConfig)
     # Validation
     validation_enabled: bool = False
     validation_references: List[dict] = field(default_factory=list)
@@ -109,7 +131,68 @@ class Instruction:
             platforms.append("twitter")
         if self.linkedin.enabled:
             platforms.append("linkedin")
+        if self.rss.enabled:
+            platforms.append("rss")
+        if self.github_issues.enabled:
+            platforms.append("github_issues")
         return platforms
+
+
+@dataclass
+class SourcePolicyConfig:
+    source_tiers: Dict[str, int] = field(default_factory=lambda: {
+        "official": 1,
+        "github": 2,
+        "trade_press": 3,
+        "community": 4,
+    })
+    trust_weights: Dict[str, float] = field(default_factory=lambda: {
+        "official": 1.0,
+        "github": 0.85,
+        "trade_press": 0.7,
+        "community": 0.5,
+    })
+    require_tier4_corroboration: bool = True
+    allow_tier4_single_source_top_issues: bool = False
+    independence_by_source_family: bool = True
+    freshness_half_life_days: int = 45
+
+
+@dataclass
+class ScoringConfig:
+    opportunity_weights: Dict[str, float] = field(default_factory=lambda: {
+        "severity": 0.25,
+        "urgency": 0.15,
+        "independent_frequency": 0.2,
+        "buyer_intent": 0.1,
+        "business_impact": 0.2,
+        "strategic_fit": 0.1,
+    })
+    confidence_weights: Dict[str, float] = field(default_factory=lambda: {
+        "source_quality": 0.25,
+        "corroboration": 0.2,
+        "source_diversity": 0.15,
+        "recency": 0.1,
+        "specificity": 0.15,
+        "extraction_quality": 0.15,
+    })
+    penalties: Dict[str, float] = field(default_factory=lambda: {
+        "vague_claim": 8.0,
+        "missing_date": 6.0,
+        "missing_business_consequence": 10.0,
+        "missing_segment": 8.0,
+        "social_only_top_issue": 30.0,
+    })
+    default_strategic_fit: float = 60.0
+
+
+@dataclass
+class VisualizationConfig:
+    enabled: bool = True
+    executive_dashboard: bool = True
+    analyst_drilldown: bool = True
+    include_time_trend: bool = True
+    include_heatmap: bool = True
 
 
 def load_instruction(yaml_path: str) -> Instruction:
@@ -143,7 +226,7 @@ def load_instruction(yaml_path: str) -> Instruction:
     platforms = raw.get("platforms", {})
     any_enabled = any(
         platforms.get(p, {}).get("enabled", False)
-        for p in ("youtube", "reddit", "twitter", "linkedin")
+        for p in ("youtube", "reddit", "twitter", "linkedin", "rss", "github_issues")
     )
     if not any_enabled:
         errors.append("At least one platform must be enabled")
@@ -179,6 +262,32 @@ def load_instruction(yaml_path: str) -> Instruction:
         quote_count=int(reporting.get("quote_count", 25)),
         max_cooccurrence_pairs=int(reporting.get("max_cooccurrence_pairs", 15)),
         top_category_limit=int(reporting.get("top_category_limit", 10)),
+    )
+    source_policy = raw.get("source_policy", {})
+    instr.source_policy = SourcePolicyConfig(
+        source_tiers=source_policy.get("source_tiers", SourcePolicyConfig().source_tiers),
+        trust_weights=source_policy.get("trust_weights", SourcePolicyConfig().trust_weights),
+        require_tier4_corroboration=bool(source_policy.get("require_tier4_corroboration", True)),
+        allow_tier4_single_source_top_issues=bool(
+            source_policy.get("allow_tier4_single_source_top_issues", False)
+        ),
+        independence_by_source_family=bool(source_policy.get("independence_by_source_family", True)),
+        freshness_half_life_days=int(source_policy.get("freshness_half_life_days", 45)),
+    )
+    scoring = raw.get("scoring", {})
+    instr.scoring = ScoringConfig(
+        opportunity_weights=scoring.get("opportunity_weights", ScoringConfig().opportunity_weights),
+        confidence_weights=scoring.get("confidence_weights", ScoringConfig().confidence_weights),
+        penalties=scoring.get("penalties", ScoringConfig().penalties),
+        default_strategic_fit=float(scoring.get("default_strategic_fit", 60.0)),
+    )
+    visualization = raw.get("visualization", {})
+    instr.visualization = VisualizationConfig(
+        enabled=bool(visualization.get("enabled", True)),
+        executive_dashboard=bool(visualization.get("executive_dashboard", True)),
+        analyst_drilldown=bool(visualization.get("analyst_drilldown", True)),
+        include_time_trend=bool(visualization.get("include_time_trend", True)),
+        include_heatmap=bool(visualization.get("include_heatmap", True)),
     )
 
     yt = platforms.get("youtube", {})
@@ -234,6 +343,25 @@ def load_instruction(yaml_path: str) -> Instruction:
             search_queries=li.get("search_queries", []),
             max_posts=quota.get("max_posts", 100),
         )
+    rss_cfg = platforms.get("rss", {})
+    if rss_cfg.get("enabled"):
+        quota = rss_cfg.get("quota", {})
+        instr.rss = RssConfig(
+            enabled=True,
+            feeds=rss_cfg.get("feeds", []),
+            max_items_per_feed=int(quota.get("max_items_per_feed", 50)),
+        )
+    gh = platforms.get("github_issues", {})
+    if gh.get("enabled"):
+        quota = gh.get("quota", {})
+        instr.github_issues = GitHubIssuesConfig(
+            enabled=True,
+            api_key_env=gh.get("api_key_env", "GITHUB_TOKEN"),
+            repos=gh.get("repos", []),
+            include_discussions=bool(gh.get("include_discussions", True)),
+            include_releases=bool(gh.get("include_releases", True)),
+            max_items_per_repo=int(quota.get("max_items_per_repo", 50)),
+        )
 
     val = raw.get("validation", {})
     instr.validation_enabled = val.get("enabled", False)
@@ -271,6 +399,16 @@ class SocialPost:
     has_wish: bool = False
     word_count: int = 0
     analysis_complete: bool = False
+    canonical_issue_id: str = ""
+    issue_priority_score: float = 0.0
+    issue_confidence_score: float = 0.0
+    issue_opportunity_score: float = 0.0
+    source_family: str = ""
+    source_tier: int = 4
+    evidence_class: str = "community_post"
+    publication_date: str = ""
+    trust_weight: float = 0.5
+    independence_key: str = ""
     metadata: Dict = field(default_factory=dict)
 
     def to_csv_row(self) -> dict:
@@ -295,6 +433,16 @@ class SocialPost:
             "has_wish": self.has_wish,
             "word_count": self.word_count,
             "analysis_complete": self.analysis_complete,
+            "canonical_issue_id": self.canonical_issue_id,
+            "issue_priority_score": self.issue_priority_score,
+            "issue_confidence_score": self.issue_confidence_score,
+            "issue_opportunity_score": self.issue_opportunity_score,
+            "source_family": self.source_family,
+            "source_tier": self.source_tier,
+            "evidence_class": self.evidence_class,
+            "publication_date": self.publication_date,
+            "trust_weight": self.trust_weight,
+            "independence_key": self.independence_key,
         }
 
     @staticmethod
@@ -305,7 +453,43 @@ class SocialPost:
             "is_relevant", "relevance_score", "categories", "category_scores",
             "segments", "segment_scores",
             "final_rank_score", "has_wish", "word_count", "analysis_complete",
+            "canonical_issue_id", "issue_priority_score", "issue_confidence_score",
+            "issue_opportunity_score", "source_family", "source_tier",
+            "evidence_class", "publication_date", "trust_weight", "independence_key",
         ]
+
+
+@dataclass
+class EvidenceItem:
+    evidence_id: str
+    post_id: str
+    canonical_issue_id: str
+    source_family: str
+    source_tier: int
+    evidence_class: str
+    trust_weight: float
+    publication_date: str
+    independence_key: str
+    excerpt: str
+    url: str = ""
+    platform: str = ""
+
+
+@dataclass
+class IssueCluster:
+    canonical_issue_id: str
+    normalized_problem_statement: str
+    category_codes: List[str] = field(default_factory=list)
+    segment_codes: List[str] = field(default_factory=list)
+    post_ids: List[str] = field(default_factory=list)
+    evidence_ids: List[str] = field(default_factory=list)
+    evidence_count: int = 0
+    independent_source_count: int = 0
+    source_family_count: int = 0
+    opportunity_score: float = 0.0
+    confidence_score: float = 0.0
+    priority_score: float = 0.0
+    final_rank_score: float = 0.0
 
 
 def json_dumps_safe(value) -> str:

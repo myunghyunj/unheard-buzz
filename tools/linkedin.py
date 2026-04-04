@@ -39,6 +39,15 @@ def run_linkedin(instruction) -> dict:
     else:
         posts = _import_from_csv()
 
+    for post in posts:
+        post.metadata.setdefault("collector_score", 0.0)
+        post.metadata.setdefault("source_family", "community")
+        post.metadata.setdefault("source_tier", 4)
+        post.metadata.setdefault("evidence_class", "community_post")
+        post.metadata.setdefault("publication_date", post.timestamp)
+        post.metadata.setdefault("trust_weight", instruction.source_policy.trust_weights.get("community", 0.5))
+        post.metadata.setdefault("independence_key", "community:linkedin.com")
+
     stats = {
         "platform": "linkedin",
         "posts_collected": len(posts),

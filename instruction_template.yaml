@@ -142,10 +142,77 @@ platforms:
     quota:
       max_posts: 50
 
+  rss:
+    enabled: false
+    feeds:
+      - name: "Vendor Release Notes"
+        url: "https://example.com/releases.rss"
+        source_family: "official"
+        source_tier: 1
+        evidence_class: "release_note"
+        trust_weight: 1.0
+    quota:
+      max_items_per_feed: 40
+
+  github_issues:
+    enabled: false
+    api_key_env: "GITHUB_TOKEN"
+    repos:
+      - "owner/repo"
+    include_discussions: true
+    include_releases: true
+    quota:
+      max_items_per_repo: 40
+
 reporting:
   quote_count: 25
   max_cooccurrence_pairs: 15
   top_category_limit: 10
+
+source_policy:
+  source_tiers:
+    official: 1
+    github: 2
+    trade_press: 3
+    community: 4
+  trust_weights:
+    official: 1.0
+    github: 0.85
+    trade_press: 0.7
+    community: 0.5
+  require_tier4_corroboration: true
+  allow_tier4_single_source_top_issues: false
+  independence_by_source_family: true
+  freshness_half_life_days: 45
+
+scoring:
+  opportunity_weights:
+    severity: 0.25
+    urgency: 0.15
+    independent_frequency: 0.2
+    buyer_intent: 0.1
+    business_impact: 0.2
+    strategic_fit: 0.1
+  confidence_weights:
+    source_quality: 0.25
+    corroboration: 0.2
+    source_diversity: 0.15
+    recency: 0.1
+    specificity: 0.15
+    extraction_quality: 0.15
+  penalties:
+    vague_claim: 8
+    missing_date: 6
+    missing_business_consequence: 10
+    missing_segment: 8
+    social_only_top_issue: 30
+
+visualization:
+  enabled: true
+  executive_dashboard: true
+  analyst_drilldown: true
+  include_time_trend: true
+  include_heatmap: true
 
 validation:
   enabled: false
