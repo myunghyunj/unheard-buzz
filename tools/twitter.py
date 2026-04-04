@@ -251,6 +251,14 @@ def run_twitter(instruction: Instruction) -> dict:
 
     deduped_posts, duplicates_removed = _dedup_posts(all_posts, instruction)
     stats["duplicates_removed"] = duplicates_removed
+    for post in deduped_posts:
+        post.metadata.setdefault("collector_score", 0.0)
+        post.metadata.setdefault("source_family", "community")
+        post.metadata.setdefault("source_tier", 4)
+        post.metadata.setdefault("evidence_class", "community_post")
+        post.metadata.setdefault("publication_date", post.timestamp)
+        post.metadata.setdefault("trust_weight", instruction.source_policy.trust_weights.get("community", 0.5))
+        post.metadata.setdefault("independence_key", "community:twitter.com")
 
     logger.info(
         "Twitter agent complete: %d tweets after dedup, %d lang-filtered, %d errors.",
