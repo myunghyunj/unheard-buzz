@@ -61,6 +61,16 @@ def _posts_to_dicts(posts: List[SocialPost]) -> List[dict]:
             "has_wish": p.has_wish,
             "word_count": p.word_count,
             "analysis_complete": p.analysis_complete,
+            "canonical_issue_id": p.canonical_issue_id,
+            "issue_priority_score": p.issue_priority_score,
+            "issue_confidence_score": p.issue_confidence_score,
+            "issue_opportunity_score": p.issue_opportunity_score,
+            "source_family": p.source_family,
+            "source_tier": p.source_tier,
+            "evidence_class": p.evidence_class,
+            "publication_date": p.publication_date,
+            "trust_weight": p.trust_weight,
+            "independence_key": p.independence_key,
             "metadata": p.metadata,
         }
         for p in posts
@@ -99,6 +109,16 @@ def _dicts_to_posts(dicts: List[dict]) -> List[SocialPost]:
             has_wish=d.get("has_wish", False),
             word_count=int(d.get("word_count", 0)),
             analysis_complete=bool(d.get("analysis_complete", False)),
+            canonical_issue_id=d.get("canonical_issue_id", ""),
+            issue_priority_score=float(d.get("issue_priority_score", 0.0)),
+            issue_confidence_score=float(d.get("issue_confidence_score", 0.0)),
+            issue_opportunity_score=float(d.get("issue_opportunity_score", 0.0)),
+            source_family=d.get("source_family", ""),
+            source_tier=int(d.get("source_tier", 4)),
+            evidence_class=d.get("evidence_class", "community_post"),
+            publication_date=d.get("publication_date", ""),
+            trust_weight=float(d.get("trust_weight", 0.5)),
+            independence_key=d.get("independence_key", ""),
             metadata=d.get("metadata", {}) if isinstance(d.get("metadata", {}), dict) else {},
         )
         posts.append(post)
@@ -157,11 +177,33 @@ def _run_linkedin(instruction: Instruction) -> Dict:
         return {"posts": [], "error": str(e)}
 
 
+def _run_rss(instruction: Instruction) -> Dict:
+    try:
+        from rss import run_rss
+        return run_rss(instruction)
+    except ImportError:
+        return {"posts": [], "error": "module not found"}
+    except Exception as e:
+        return {"posts": [], "error": str(e)}
+
+
+def _run_github_issues(instruction: Instruction) -> Dict:
+    try:
+        from github_issues import run_github_issues
+        return run_github_issues(instruction)
+    except ImportError:
+        return {"posts": [], "error": "module not found"}
+    except Exception as e:
+        return {"posts": [], "error": str(e)}
+
+
 _PLATFORM_RUNNERS = {
     "youtube": _run_youtube,
     "reddit": _run_reddit,
     "twitter": _run_twitter,
     "linkedin": _run_linkedin,
+    "rss": _run_rss,
+    "github_issues": _run_github_issues,
 }
 
 
@@ -370,6 +412,21 @@ def run_pipeline(
         print(f"  {name}: {path}")
     print()
 
+    if instruction.visualization.enabled:
+        print("=" * 60)
+        print("PHASE 3b: Visualizations")
+        print("=" * 60)
+        try:
+            from visualizations import generate_visualizations
+            viz = generate_visualizations(generated, output_dir, instruction)
+            generated.update(viz)
+            _save_checkpoint("phase3b_visualizations", {"generated_files": viz}, output_dir)
+            for name, path in viz.items():
+                print(f"  {name}: {path}")
+        except Exception as e:
+            print(f"  Visualization phase skipped: {e}")
+        print()
+
     if instruction.validation_enabled:
         print("=" * 60)
         print("PHASE 4: Validation")
@@ -394,7 +451,7 @@ def run_pipeline(
     pct_relevant = (relevant / len(all_posts) * 100) if all_posts else 0
 
     plat_counts = []
-    for plat in ("youtube", "reddit", "twitter", "linkedin"):
+    for plat in ("youtube", "reddit", "twitter", "linkedin", "rss", "github_issues"):
         count = platform_stats.get(plat, 0)
         plat_counts.append(f"{plat.capitalize()}: {count}")
 

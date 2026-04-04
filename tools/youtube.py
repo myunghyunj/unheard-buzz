@@ -16,8 +16,16 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+try:
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+except ImportError:  # pragma: no cover - dependency is optional for unit tests.
+    build = None
+
+    class HttpError(Exception):
+        """Fallback HttpError when googleapiclient is unavailable."""
+        pass
+
 
 from config import Instruction, SocialPost, MIN_COMMENT_WORDS
 from language import guess_language, language_allowed
@@ -82,6 +90,8 @@ class _QuotaTracker:
 def _build_youtube_client(api_key: str):
     if not api_key:
         raise ValueError("Set YOUTUBE_API_KEY (or configured env var) before running YouTube collection.")
+    if build is None:
+        raise ImportError("googleapiclient is required for YouTube collection. Install repo requirements first.")
     return build("youtube", "v3", developerKey=api_key)
 
 
@@ -654,6 +664,13 @@ def run_youtube(instruction: Instruction) -> dict:
     raw_comments = _extract_all_comments(youtube, videos, instruction, quota)
     posts, lang_filtered = _convert_comments_to_posts(raw_comments, videos, instruction)
     posts, duplicates_removed = _dedup_posts(posts, instruction)
+    for post in posts:
+        post.metadata.setdefault("source_family", "community")
+        post.metadata.setdefault("source_tier", 4)
+        post.metadata.setdefault("evidence_class", "community_comment")
+        post.metadata.setdefault("publication_date", post.timestamp)
+        post.metadata.setdefault("trust_weight", instruction.source_policy.trust_weights.get("community", 0.5))
+        post.metadata.setdefault("independence_key", "community:youtube.com")
 
     reply_posts = [p for p in posts if p.is_reply]
     unique_authors = len({p.author for p in posts})

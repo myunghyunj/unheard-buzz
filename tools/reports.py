@@ -24,6 +24,7 @@ from analyzer import (
     representative_posts_by_category,
 )
 from config import Instruction, SocialPost
+from issue_intelligence import build_issue_intelligence
 
 
 def clone_posts(posts: List[SocialPost]) -> List[SocialPost]:
@@ -234,6 +235,34 @@ def generate_source_registry(posts: List[SocialPost], output_dir: str) -> str:
         "top_categories",
     ]
     return _write_csv(os.path.join(output_dir, "source_registry.csv"), fieldnames, rows)
+
+
+def generate_enriched_source_registry(posts: List[SocialPost], output_dir: str) -> str:
+    rows = []
+    for post in posts:
+        rows.append(
+            {
+                "post_id": post.post_id,
+                "platform": post.platform,
+                "source_id": post.source_id,
+                "source_title": post.source_title,
+                "source_family": post.source_family,
+                "source_tier": post.source_tier,
+                "evidence_class": post.evidence_class,
+                "trust_weight": post.trust_weight,
+                "independence_key": post.independence_key,
+                "publication_date": post.publication_date or post.timestamp,
+                "url": post.url,
+            }
+        )
+    return _write_csv(
+        os.path.join(output_dir, "source_registry_enriched.csv"),
+        [
+            "post_id", "platform", "source_id", "source_title", "source_family", "source_tier",
+            "evidence_class", "trust_weight", "independence_key", "publication_date", "url",
+        ],
+        rows,
+    )
 
 
 def _youtube_channel_url(channel: dict) -> str:
@@ -558,6 +587,10 @@ def generate_summary_stats(
         "segments": _build_segment_stats(stats_posts, instruction),
         "category_exemplars": category_exemplars,
         "top_quotes": top_quotes or [],
+        "top_issues": [],
+        "score_breakdowns": {},
+        "evidence_counts": {},
+        "source_mix": dict(Counter((post.source_family or post.platform) for post in stats_posts)),
     }
 
     filepath = os.path.join(output_dir, "summary_stats.json")
@@ -623,6 +656,43 @@ def _append_voice_of_customer(lines: List[str], stats: dict, instruction: Instru
         lines.append("")
 
 
+
+
+def _append_top_issues(lines: List[str], stats: dict, instruction: Instruction) -> None:
+    top_issues = stats.get("top_issues", [])[:5]
+    if not top_issues:
+        return
+
+    lines.append("## Top issues")
+    lines.append("")
+    lines.append("| Rank | Issue | Priority | Opportunity | Confidence | Evidence | Independent | Freshness | Flags |")
+    lines.append("|-----:|-------|---------:|------------:|-----------:|---------:|------------:|----------:|-------|")
+    for rank, issue in enumerate(top_issues, 1):
+        flags = ", ".join(issue.get("flags", []))
+        lines.append(
+            f"| {rank} | {issue['canonical_issue_id']} — {issue['normalized_problem_statement'][:60]} | "
+            f"{issue['priority_score']} | {issue['opportunity_score']} | {issue['confidence_score']} | "
+            f"{issue['evidence_count']} | {issue['independent_source_count']} | {issue.get('freshness_score', 0.0)} | {flags or '-'} |"
+        )
+    lines.append("")
+
+    for issue in top_issues[:3]:
+        lines.append(f"### {issue['canonical_issue_id']}")
+        lines.append("")
+        lines.append(issue['normalized_problem_statement'])
+        lines.append("")
+        lines.append(
+            f"*Impact vs confidence: opportunity {issue['opportunity_score']}, confidence {issue['confidence_score']}, "
+            f"priority {issue['priority_score']}. Evidence count {issue['evidence_count']}, "
+            f"independent sources {issue['independent_source_count']}, freshest score {issue.get('freshness_score', 0.0)}.*"
+        )
+        lines.append("")
+        if issue.get("provenance_snippets"):
+            lines.append("Supporting evidence:")
+            for snippet in issue["provenance_snippets"][:3]:
+                lines.append(f"- {snippet}")
+            lines.append("")
+
 def generate_summary_report(stats: dict, instruction: Instruction, output_dir: str) -> str:
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(output_dir, "summary_report.md")
@@ -638,6 +708,7 @@ def generate_summary_report(stats: dict, instruction: Instruction, output_dir: s
 
     _append_project_brief(lines, instruction)
     _append_voice_of_customer(lines, stats, instruction)
+    _append_top_issues(lines, stats, instruction)
 
     totals = stats.get("totals", {})
     collector_summary = stats.get("collector_summary", {})
@@ -668,6 +739,7 @@ def generate_summary_report(stats: dict, instruction: Instruction, output_dir: s
 
     lines.append("## Category Rankings")
     lines.append("")
+
     lines.append("| Rank | Code | Category | Count | % Scope | % Wish |")
     lines.append("|-----:|:----:|----------|------:|--------:|-------:|")
     for item in stats.get("category_rankings", []):
@@ -967,6 +1039,124 @@ def generate_validation_report(posts: List[SocialPost], instruction: Instruction
     return filepath
 
 
+def _bucket_period(timestamp: str) -> str:
+    if not timestamp:
+        return "unknown"
+    try:
+        iso = timestamp.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(iso)
+        return dt.strftime("%Y-%m")
+    except Exception:
+        return (timestamp or "unknown")[:7] or "unknown"
+
+
+def _build_dashboard_payload(issue_layer: dict, posts: List[SocialPost], instruction: Instruction) -> dict:
+    evidence_by_issue: Dict[str, List] = defaultdict(list)
+    for evidence in issue_layer["evidence"]:
+        evidence_by_issue[evidence.canonical_issue_id].append(evidence)
+
+    for items in evidence_by_issue.values():
+        items.sort(key=lambda e: (-(getattr(e, "trust_weight", 0.0)), getattr(e, "source_tier", 9), getattr(e, "publication_date", "")), reverse=False)
+
+    issue_entries: List[dict] = []
+    for issue in issue_layer["issues"]:
+        issue_evidence = evidence_by_issue.get(issue.canonical_issue_id, [])
+        issue_entries.append(
+            {
+                "canonical_issue_id": issue.canonical_issue_id,
+                "normalized_problem_statement": issue.normalized_problem_statement,
+                "categories": issue.category_codes,
+                "category_names": [instruction.categories.get(code, {}).get("name", code) for code in issue.category_codes],
+                "segments": issue.segment_codes,
+                "segment_names": [instruction.segments.get(code, {}).get("name", code) for code in issue.segment_codes],
+                "evidence_count": issue.evidence_count,
+                "independent_source_count": issue.independent_source_count,
+                "source_family_count": issue.source_family_count,
+                "opportunity_score": issue.opportunity_score,
+                "confidence_score": issue.confidence_score,
+                "priority_score": issue.priority_score,
+                "final_rank_score": issue.final_rank_score,
+                "freshness_score": round(getattr(issue, "freshness_score", 0.0), 2),
+                "source_mix": getattr(issue, "source_mix", {}),
+                "flags": list(getattr(issue, "flags", [])),
+                "score_breakdown": getattr(issue, "score_breakdown", {}),
+                "provenance_snippet": getattr(issue, "provenance_snippets", [""])[0] if getattr(issue, "provenance_snippets", []) else "",
+                "provenance_snippets": list(getattr(issue, "provenance_snippets", [])),
+                "supporting_evidence": [
+                    {
+                        "evidence_id": evidence.evidence_id,
+                        "source_family": evidence.source_family,
+                        "source_tier": evidence.source_tier,
+                        "evidence_class": evidence.evidence_class,
+                        "publication_date": evidence.publication_date,
+                        "platform": evidence.platform,
+                        "url": evidence.url,
+                        "excerpt": evidence.excerpt,
+                        "source_title": getattr(evidence, "source_title", ""),
+                        "business_consequence": getattr(evidence, "business_consequence", ""),
+                        "buyer_role": getattr(evidence, "buyer_role", ""),
+                        "segment": getattr(evidence, "segment", ""),
+                        "geography": getattr(evidence, "geography", ""),
+                        "specificity_score": round(getattr(evidence, "specificity_score", 0.0), 2),
+                        "extraction_quality": round(getattr(evidence, "extraction_quality", 0.0), 2),
+                    }
+                    for evidence in issue_evidence[:6]
+                ],
+            }
+        )
+
+    source_mix = dict(Counter(e.source_family for e in issue_layer["evidence"]))
+    time_trend = [
+        {"period": period, "count": count}
+        for period, count in sorted(Counter(_bucket_period(post.publication_date or post.timestamp) for post in posts if getattr(post, "canonical_issue_id", "")).items())
+    ]
+
+    segment_codes = sorted(instruction.segments.keys()) or ["unsegmented"]
+    heatmap_values: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for issue in issue_entries:
+        row_categories = issue["categories"] or ["uncategorized"]
+        row_segments = issue["segments"] or ["unsegmented"]
+        for category in row_categories:
+            for segment in row_segments:
+                heatmap_values[category][segment] += issue["evidence_count"]
+
+    heatmap = {
+        "rows": sorted(heatmap_values.keys()),
+        "cols": segment_codes,
+        "values": {row: {col: heatmap_values[row].get(col, 0) for col in segment_codes} for row in heatmap_values},
+    }
+
+    return {
+        "project_name": instruction.project_name,
+        "generated_at": datetime.now().isoformat(),
+        "issues": issue_entries,
+        "evidence": [
+            {
+                "evidence_id": evidence.evidence_id,
+                "canonical_issue_id": evidence.canonical_issue_id,
+                "source_family": evidence.source_family,
+                "source_tier": evidence.source_tier,
+                "evidence_class": evidence.evidence_class,
+                "publication_date": evidence.publication_date,
+                "platform": evidence.platform,
+                "url": evidence.url,
+                "excerpt": evidence.excerpt,
+                "source_title": getattr(evidence, "source_title", ""),
+                "business_consequence": getattr(evidence, "business_consequence", ""),
+                "buyer_role": getattr(evidence, "buyer_role", ""),
+                "segment": getattr(evidence, "segment", ""),
+                "geography": getattr(evidence, "geography", ""),
+                "specificity_score": round(getattr(evidence, "specificity_score", 0.0), 2),
+                "extraction_quality": round(getattr(evidence, "extraction_quality", 0.0), 2),
+            }
+            for evidence in issue_layer["evidence"]
+        ],
+        "source_mix": source_mix,
+        "time_trend": time_trend,
+        "heatmap": heatmap,
+    }
+
+
 def generate_all(
     posts: List[SocialPost],
     instruction: Instruction,
@@ -981,22 +1171,99 @@ def generate_all(
     generated["all_posts_csv"] = generate_posts_csv(export_posts, output_dir)
     generated.update(generate_coded_posts_csv(export_posts, output_dir))
     generated["source_registry_csv"] = generate_source_registry(export_posts, output_dir)
+    generated["source_registry_enriched_csv"] = generate_enriched_source_registry(posts, output_dir)
     generated.update(generate_youtube_registries(collector_context or {}, posts, output_dir))
 
-    excerpts = select_quotable_excerpts(
-        export_posts,
-        instruction,
-        count=instruction.reporting.quote_count,
+    issue_layer = build_issue_intelligence(posts, instruction)
+
+    issue_rows = []
+    for issue in issue_layer["issues"]:
+        issue_rows.append(
+            {
+                "canonical_issue_id": issue.canonical_issue_id,
+                "normalized_problem_statement": issue.normalized_problem_statement,
+                "categories": "|".join(issue.category_codes),
+                "segments": "|".join(issue.segment_codes),
+                "evidence_count": issue.evidence_count,
+                "independent_source_count": issue.independent_source_count,
+                "source_family_count": issue.source_family_count,
+                "opportunity_score": issue.opportunity_score,
+                "confidence_score": issue.confidence_score,
+                "priority_score": issue.priority_score,
+                "freshness_score": round(getattr(issue, "freshness_score", 0.0), 2),
+                "flags": "|".join(getattr(issue, "flags", [])),
+                "source_mix_json": json.dumps(getattr(issue, "source_mix", {}), ensure_ascii=False, sort_keys=True),
+                "score_breakdown_json": json.dumps(getattr(issue, "score_breakdown", {}), ensure_ascii=False, sort_keys=True),
+                "final_rank_score": issue.final_rank_score,
+            }
+        )
+    generated["issue_registry_csv"] = _write_csv(
+        os.path.join(output_dir, "issue_registry.csv"),
+        list(issue_rows[0].keys()) if issue_rows else [
+            "canonical_issue_id", "normalized_problem_statement", "categories", "segments",
+            "evidence_count", "independent_source_count", "source_family_count",
+            "opportunity_score", "confidence_score", "priority_score", "freshness_score",
+            "flags", "source_mix_json", "score_breakdown_json", "final_rank_score",
+        ],
+        issue_rows,
     )
+
+    evidence_rows = [
+        {
+            "evidence_id": e.evidence_id,
+            "post_id": e.post_id,
+            "canonical_issue_id": e.canonical_issue_id,
+            "source_family": e.source_family,
+            "source_tier": e.source_tier,
+            "evidence_class": e.evidence_class,
+            "trust_weight": e.trust_weight,
+            "publication_date": e.publication_date,
+            "independence_key": e.independence_key,
+            "platform": e.platform,
+            "url": e.url,
+            "source_title": getattr(e, "source_title", ""),
+            "normalized_problem_statement": getattr(e, "normalized_problem_statement", ""),
+            "business_consequence": getattr(e, "business_consequence", ""),
+            "buyer_role": getattr(e, "buyer_role", ""),
+            "segment": getattr(e, "segment", ""),
+            "geography": getattr(e, "geography", ""),
+            "specificity_score": round(getattr(e, "specificity_score", 0.0), 2),
+            "extraction_quality": round(getattr(e, "extraction_quality", 0.0), 2),
+            "excerpt": e.excerpt,
+        }
+        for e in issue_layer["evidence"]
+    ]
+    generated["evidence_registry_csv"] = _write_csv(
+        os.path.join(output_dir, "evidence_registry.csv"),
+        list(evidence_rows[0].keys()) if evidence_rows else [
+            "evidence_id", "post_id", "canonical_issue_id", "source_family", "source_tier",
+            "evidence_class", "trust_weight", "publication_date", "independence_key", "platform",
+            "url", "source_title", "normalized_problem_statement", "business_consequence", "buyer_role",
+            "segment", "geography", "specificity_score", "extraction_quality", "excerpt",
+        ],
+        evidence_rows,
+    )
+
+    excerpts = select_quotable_excerpts(export_posts, instruction, count=instruction.reporting.quote_count)
     generated["quotable_excerpts_md"] = generate_excerpts_md(excerpts, instruction, output_dir)
 
-    stats = generate_summary_stats(
-        posts,
-        instruction,
-        output_dir,
-        collector_context=collector_context,
-        top_quotes=excerpts,
-    )
+    stats = generate_summary_stats(posts, instruction, output_dir, collector_context=collector_context, top_quotes=excerpts)
+    dashboard_payload = _build_dashboard_payload(issue_layer, posts, instruction)
+    stats["top_issues"] = dashboard_payload["issues"][:10]
+    stats["score_breakdowns"] = {issue["canonical_issue_id"]: issue.get("score_breakdown", {}) for issue in dashboard_payload["issues"][:20]}
+    stats["evidence_counts"] = dict(Counter(e.canonical_issue_id for e in issue_layer["evidence"]))
+    stats["independent_source_count"] = sum(issue.independent_source_count for issue in issue_layer["issues"][:10])
+    stats["source_family_count"] = len({e.source_family for e in issue_layer["evidence"]})
+    stats["freshness_score"] = round(sum(getattr(issue, "freshness_score", 0.0) for issue in issue_layer["issues"][:10]) / max(1, min(10, len(issue_layer["issues"]))), 2)
+    stats["source_mix"] = dashboard_payload["source_mix"]
+    stats["dashboard_data"] = dashboard_payload
+
+    with open(os.path.join(output_dir, "summary_stats.json"), "w", encoding="utf-8") as handle:
+        json.dump(stats, handle, indent=2, ensure_ascii=False)
+    with open(os.path.join(output_dir, "dashboard_data.json"), "w", encoding="utf-8") as handle:
+        json.dump(dashboard_payload, handle, indent=2, ensure_ascii=False)
+
+    generated["dashboard_data_json"] = os.path.join(output_dir, "dashboard_data.json")
     generated["summary_stats_json"] = os.path.join(output_dir, "summary_stats.json")
     generated["summary_report_md"] = generate_summary_report(stats, instruction, output_dir)
 
