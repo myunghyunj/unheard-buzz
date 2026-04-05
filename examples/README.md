@@ -15,8 +15,8 @@ Suggested flow:
 
 1. Read `amputee.yaml` to understand the research brief.
 2. Open the sample-output README inside `amputee_sample_output/` to see the packaged outputs.
-3. Inspect the reports, CSV exports, and checkpoints to understand the expected output shape.
-4. Adapt a visualization starter once you know which story the graphics agent should tell.
+3. Inspect the reports, decision artifacts, registries, dashboards, and checkpoints to understand the expected output shape.
+4. Use built-in dashboards first; adapt a visualization starter only if you need additional presentation polish.
 
 
 ## v4 Issue intelligence outputs
@@ -28,3 +28,16 @@ New structured outputs are available in addition to legacy exports:
 - `dashboard_data.json`
 - `output/visualizations/executive_dashboard.html`
 - `output/visualizations/analyst_drilldown.html`
+
+## Modern consultant artifacts
+
+Current example cases should be read as consultant runs, not just collection demos.
+Important artifacts now include:
+
+- `decision_memo.md`
+- `opportunity_map.csv`
+- `recommendation_cards.json`
+- `annotation_pack.csv`
+- `eval_report.md`
+- `run_manifest.json`
+- `history_diff.md` when state/history is enabled

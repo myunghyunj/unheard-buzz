@@ -30,6 +30,45 @@ project:
     - "Shape messaging and positioning"
     - "Choose follow-up qualitative interviews"
 
+case:
+  id: "your_case_id"
+  name: "Your Case Name"
+  client: "Internal or client stakeholder"
+  market_scope: "What market, workflow, or product surface is in scope"
+  geography: "Global / US / Korea / etc."
+  time_horizon: "Current quarter / past 12 months / etc."
+  decision_objective: "What decision this run should inform"
+  target_deliverables:
+    - "decision_memo.md"
+    - "opportunity_map.csv"
+    - "recommendation_cards.json"
+  allowed_sources:
+    - "youtube"
+    - "reddit"
+    - "rss"
+    - "github_issues"
+  excluded_sources: []
+  risk_notes:
+    - "Do not overclaim from social-only evidence"
+
+workstreams:
+  - id: "unmet_needs"
+    name: "Unmet Needs"
+    objective: "Identify the strongest unmet needs and opportunity areas"
+    primary_agent_role: "issue_analyst"
+    fallback_role: "orchestrator"
+    handoff_inputs:
+      - "issue_registry.csv"
+      - "evidence_registry.csv"
+      - "benchmark_coverage.json"
+    handoff_outputs:
+      - "decision_memo.md"
+      - "opportunity_map.csv"
+    stop_conditions:
+      - "Top recommendations are linked to issue IDs and evidence IDs"
+    status: "planned"
+    enabled: true
+
 analysis:
   min_comment_words: 15
   include_irrelevant_in_stats: false
@@ -213,6 +252,37 @@ visualization:
   analyst_drilldown: true
   include_time_trend: true
   include_heatmap: true
+
+state_store:
+  enabled: true
+  backend: "sqlite"
+  path: "state/unheard_buzz.sqlite3"
+  project_id: "your_case_id"
+  keep_raw_text: true
+
+history:
+  enabled: true
+  lookback_runs: 5
+  emit_diff_report: true
+
+benchmarks:
+  enabled: false
+  manual_sources: []
+  alternatives:
+    tracked_entities: []
+  entity_aliases: {}
+
+agent_control:
+  enabled: true
+  max_parallel_roles: 4
+  default_time_budget_minutes: 45
+  default_retry_budget: 2
+  default_confidence_threshold: 0.65
+  allow_external_search: true
+  escalation_triggers:
+    - "low_evidence_coverage"
+    - "benchmark_contradiction_veto"
+    - "sensitive_recommendation"
 
 validation:
   enabled: false

@@ -4,6 +4,8 @@ import os
 from collections import Counter, defaultdict
 from typing import Dict, List
 
+from schema_versions import PROGRAM_CONTRACT_VERSION, schema_version
+
 
 def _write_csv(path: str, rows: List[dict], fallback_fields: List[str]) -> str:
     fieldnames = list(rows[0].keys()) if rows else fallback_fields
@@ -51,9 +53,12 @@ def write_decision_outputs(
 
     outputs["opportunity_map_csv"] = _write_csv(
         os.path.join(output_dir, "opportunity_map.csv"),
-        decision_pack.get("opportunity_map", []),
         [
-            "recommendation_id", "canonical_issue_id", "problem_statement", "target_segment",
+            {"schema_version": schema_version("recommendation"), **row}
+            for row in decision_pack.get("opportunity_map", [])
+        ],
+        [
+            "schema_version", "recommendation_id", "canonical_issue_id", "problem_statement", "target_segment",
             "target_entity", "target_workflow", "recommendation_type", "priority_score",
             "decision_score", "pain_intensity", "breadth_reach", "benchmark_gap",
             "switching_friction", "urgency", "evidence_quality", "segment_concentration",
@@ -62,17 +67,23 @@ def write_decision_outputs(
     )
     outputs["segment_pain_matrix_csv"] = _write_csv(
         os.path.join(output_dir, "segment_pain_matrix.csv"),
-        decision_pack.get("segment_pain_matrix", []),
         [
-            "segment_code", "canonical_issue_id", "problem_statement", "priority_score",
+            {"schema_version": schema_version("recommendation"), **row}
+            for row in decision_pack.get("segment_pain_matrix", [])
+        ],
+        [
+            "schema_version", "segment_code", "canonical_issue_id", "problem_statement", "priority_score",
             "decision_score", "evidence_count", "recommendation_id",
         ],
     )
     outputs["hypothesis_backlog_csv"] = _write_csv(
         os.path.join(output_dir, "hypothesis_backlog.csv"),
-        decision_pack.get("hypothesis_backlog", []),
         [
-            "hypothesis_id", "recommendation_id", "canonical_issue_id", "hypothesis_statement",
+            {"schema_version": schema_version("recommendation"), **row}
+            for row in decision_pack.get("hypothesis_backlog", [])
+        ],
+        [
+            "schema_version", "hypothesis_id", "recommendation_id", "canonical_issue_id", "hypothesis_statement",
             "test_type", "priority_score", "decision_score", "supporting_issue_ids",
             "supporting_evidence_ids", "success_metric",
         ],
@@ -80,7 +91,19 @@ def write_decision_outputs(
 
     recommendation_cards_path = os.path.join(output_dir, "recommendation_cards.json")
     with open(recommendation_cards_path, "w", encoding="utf-8") as handle:
-        json.dump(decision_pack.get("recommendations", []), handle, indent=2, ensure_ascii=False)
+        json.dump(
+            [
+                {
+                    "schema_version": schema_version("recommendation"),
+                    "program_contract_version": PROGRAM_CONTRACT_VERSION,
+                    **row,
+                }
+                for row in decision_pack.get("recommendations", [])
+            ],
+            handle,
+            indent=2,
+            ensure_ascii=False,
+        )
     outputs["recommendation_cards_json"] = recommendation_cards_path
 
     question_lines = ["# Research Questions", ""]

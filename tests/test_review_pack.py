@@ -15,7 +15,7 @@ from config import Instruction, ManualSourceConfig, SocialPost
 from decision_engine import build_decision_package
 from entities import build_entity_layer
 from issue_intelligence import build_issue_intelligence
-from review_pack import apply_reviewer_overrides, write_review_pack
+from review_pack import apply_reviewer_overrides, merge_reviewer_annotations, write_review_pack
 
 
 def _instruction() -> Instruction:
@@ -123,6 +123,7 @@ class ReviewPackTest(unittest.TestCase):
                 rows = list(csv.DictReader(handle))
 
         expected_columns = {
+            "schema_version",
             "record_type",
             "record_id",
             "canonical_issue_id",
@@ -132,10 +133,40 @@ class ReviewPackTest(unittest.TestCase):
             "current_value",
             "supporting_evidence_ids",
             "reviewer_override",
+            "annotation_origin",
             "notes",
         }
         self.assertEqual(set(rows[0].keys()), expected_columns)
         self.assertTrue(any(row["reviewer_override"] == "high" for row in rows if row["record_type"] == "recommendation"))
+        self.assertTrue(any(row["annotation_origin"] == "manual_csv" for row in rows if row["record_type"] == "recommendation"))
+
+    def test_manual_annotations_override_reviewer_memory_for_same_key(self):
+        merged = merge_reviewer_annotations(
+            [
+                {
+                    "record_type": "recommendation",
+                    "record_id": "rec_1",
+                    "field": "confidence_label",
+                    "override_value": "high",
+                    "notes": "Fresh review",
+                    "annotation_origin": "manual_csv",
+                }
+            ],
+            [
+                {
+                    "record_type": "recommendation",
+                    "record_id": "rec_1",
+                    "field": "confidence_label",
+                    "override_value": "medium",
+                    "notes": "Old memory",
+                    "annotation_origin": "review_memory",
+                }
+            ],
+        )
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["override_value"], "high")
+        self.assertEqual(merged[0]["annotation_origin"], "manual_csv")
 
 
 if __name__ == "__main__":

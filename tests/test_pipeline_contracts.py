@@ -4,6 +4,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -12,8 +13,9 @@ if TOOLS_DIR not in sys.path:
     sys.path.insert(0, TOOLS_DIR)
 
 from analyzer import compute_final_rank_score, filter_posts, representative_posts_by_category
-from config import SocialPost, load_instruction
+from config import Instruction, SocialPost, load_instruction
 from reports import generate_all, generate_summary_report, generate_summary_stats
+from run import run_pipeline
 from youtube import _convert_comments_to_posts
 
 
@@ -75,6 +77,39 @@ class PipelineContractsTest(unittest.TestCase):
               lookback_runs: 3
               emit_diff_report: true
 
+            case:
+              id: "case_smoke"
+              name: "Smoke Case"
+              client: "Internal"
+              market_scope: "Urban mobility"
+              geography: "US"
+              time_horizon: "current quarter"
+              decision_objective: "Pick the highest-confidence next bet"
+              target_deliverables: ["decision_memo.md", "opportunity_map.csv"]
+              allowed_sources: ["reddit", "youtube", "github_issues"]
+              excluded_sources: ["private_forums"]
+              risk_notes: ["Do not overclaim from social-only evidence"]
+
+            workstreams:
+              - id: "unmet_needs"
+                name: "Unmet Needs"
+                objective: "Identify the strongest unmet needs"
+                primary_agent_role: "issue_analyst"
+                fallback_role: "orchestrator"
+                handoff_inputs: ["issue_registry.csv", "evidence_registry.csv"]
+                handoff_outputs: ["decision_memo.md"]
+                stop_conditions: ["Top recommendations are evidence-linked"]
+                status: "planned"
+
+            agent_control:
+              enabled: true
+              max_parallel_roles: 5
+              default_time_budget_minutes: 60
+              default_retry_budget: 3
+              default_confidence_threshold: 0.7
+              allow_external_search: true
+              escalation_triggers: ["low_evidence_coverage", "sensitive_recommendation"]
+
             benchmarks:
               enabled: true
               manual_sources:
@@ -119,6 +154,12 @@ class PipelineContractsTest(unittest.TestCase):
         self.assertFalse(instruction.state_store.keep_raw_text)
         self.assertTrue(instruction.history.enabled)
         self.assertEqual(instruction.history.lookback_runs, 3)
+        self.assertEqual(instruction.case.case_id, "case_smoke")
+        self.assertEqual(instruction.case.client, "Internal")
+        self.assertEqual(len(instruction.workstreams), 1)
+        self.assertEqual(instruction.workstreams[0].workstream_id, "unmet_needs")
+        self.assertEqual(instruction.agent_control.max_parallel_roles, 5)
+        self.assertEqual(instruction.agent_control.default_time_budget_minutes, 60)
         self.assertTrue(instruction.benchmarks.enabled)
         self.assertEqual(len(instruction.benchmarks.manual_sources), 1)
         self.assertEqual(instruction.benchmarks.manual_sources[0].entity, "VendorCo")
@@ -381,6 +422,13 @@ class PipelineContractsTest(unittest.TestCase):
                 "eval_report_md",
                 "ranking_stability_json",
                 "benchmark_leakage_report_json",
+                "case_plan_md",
+                "workstream_registry_json",
+                "workstream_status_md",
+                "agent_plan_json",
+                "agent_execution_log_json",
+                "agent_handoff_log_json",
+                "artifact_inventory_json",
                 "dashboard_data_json",
                 "summary_stats_json",
                 "summary_report_md",
@@ -398,6 +446,16 @@ class PipelineContractsTest(unittest.TestCase):
                 benchmark_coverage = json.load(handle)
             with open(generated["recommendation_cards_json"], "r", encoding="utf-8") as handle:
                 recommendation_cards = json.load(handle)
+            with open(generated["workstream_registry_json"], "r", encoding="utf-8") as handle:
+                workstream_registry = json.load(handle)
+            with open(generated["agent_plan_json"], "r", encoding="utf-8") as handle:
+                agent_plan = json.load(handle)
+            with open(generated["agent_execution_log_json"], "r", encoding="utf-8") as handle:
+                agent_execution = json.load(handle)
+            with open(generated["agent_handoff_log_json"], "r", encoding="utf-8") as handle:
+                agent_handoff = json.load(handle)
+            with open(generated["artifact_inventory_json"], "r", encoding="utf-8") as handle:
+                artifact_inventory = json.load(handle)
             with open(generated["ranking_stability_json"], "r", encoding="utf-8") as handle:
                 ranking_stability = json.load(handle)
             with open(generated["benchmark_leakage_report_json"], "r", encoding="utf-8") as handle:
@@ -419,6 +477,11 @@ class PipelineContractsTest(unittest.TestCase):
             self.assertIn("document_count", benchmark_coverage)
             self.assertGreaterEqual(benchmark_coverage["document_count"], 1)
             self.assertTrue(recommendation_cards)
+            self.assertEqual(workstream_registry["case"]["case_name"], "Mobility")
+            self.assertTrue(agent_plan["roles"])
+            self.assertTrue(agent_execution["events"])
+            self.assertTrue(agent_handoff["handoffs"])
+            self.assertTrue(artifact_inventory["artifacts"])
             self.assertIn("history_available", ranking_stability)
             self.assertIn("leakage_count", benchmark_leakage)
             self.assertIn("## Evidence", memo_text)
@@ -498,6 +561,56 @@ class PipelineContractsTest(unittest.TestCase):
         self.assertEqual(len(posts), 1)
         self.assertEqual(posts[0].metadata["language_guess"], "en")
         self.assertEqual(lang_filtered, 1)
+
+    def test_run_pipeline_always_emits_run_manifest(self):
+        instruction = Instruction(
+            project_name="Manifest",
+            project_description="Run manifest smoke",
+            relevance_keywords=["billing", "broken"],
+            min_comment_words=2,
+            categories={
+                "OPS": {
+                    "name": "Operations",
+                    "description": "Operational pain",
+                    "keywords": ["billing", "broken"],
+                }
+            },
+        )
+        instruction.reddit.enabled = True
+        instruction.reddit.subreddits = ["saas"]
+        instruction.reddit.search_queries = ["broken billing"]
+        instruction.visualization.enabled = False
+        instruction.validation_enabled = False
+
+        fake_posts = [
+            SocialPost(
+                post_id="p1",
+                platform="reddit",
+                source_id="thread_1",
+                source_title="Complaint",
+                author="user1",
+                text="Billing export is broken and blocks finance.",
+                metadata={"subreddit": "saas"},
+            )
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict("run._PLATFORM_RUNNERS", {"reddit": lambda _instruction: {"posts": fake_posts}}, clear=False):
+                summary = run_pipeline(
+                    instruction,
+                    output_dir=tmpdir,
+                    skip_trends=True,
+                    no_state=True,
+                )
+
+            manifest_path = summary["generated_files"]["run_manifest_json"]
+            self.assertTrue(os.path.exists(manifest_path))
+            with open(manifest_path, "r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+
+        self.assertIn("artifact_inventory_path", manifest)
+        self.assertTrue(manifest["generated_files"])
+        self.assertEqual(manifest["state_store"]["resolved_backend"], "disabled")
 
 
 if __name__ == "__main__":

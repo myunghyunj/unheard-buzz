@@ -62,7 +62,9 @@ tools/run.py -> run_pipeline()
 ## Agent orchestration layer
 
 The Python pipeline is the shared execution backbone.
-After phase 3 outputs exist, repo-aware agents are expected to branch into parallel interpretation and presentation work.
+Agent orchestration is now both:
+- a runtime pattern
+- a machine-readable contract emitted as `agent_plan.json`
 
 ```text
 phase 3 output artifacts
@@ -73,8 +75,8 @@ phase 3 output artifacts
       `--> graphics agent -> output/visualizations/*.html|*.svg|*.png|*.ai
 ```
 
-This orchestration layer is a runtime pattern, not a first-class Python module.
-The graphics pass should be treated as post-processing over shared outputs, not as another collector.
+`tools/program_contract.py` emits the default case, workstream, and role plan so the consultant workflow is inspectable even before agent execution traces exist.
+The graphics pass should be treated as optional export polish over shared outputs, not as another collector or as a requirement for useful dashboards.
 
 ## Core configuration model
 
@@ -97,6 +99,9 @@ Each category must define `name`, `description`, and `keywords`.
 Optional but high-leverage fields now include:
 
 - `project.objectives`, `project.target_audiences`, `project.key_questions`, `project.decision_uses`
+- `case.*` for first-class consulting case scoping
+- `workstreams[]` for role ownership and handoff contracts
+- `agent_control.*` for budgets, search permission, and escalation defaults
 - `analysis.segments` for cross-segment comparison tables
 - `reporting.quote_count`, `reporting.max_cooccurrence_pairs`, `reporting.top_category_limit`
 
@@ -177,19 +182,21 @@ Order of operations:
 8. write entity and benchmark exports (`entity_registry.csv`, `issue_entity_links.csv`, `benchmark_coverage.json`, `contradiction_registry.csv`, `alternatives_matrix.csv`)
 9. write decision outputs (`decision_memo.md`, `opportunity_map.csv`, `segment_pain_matrix.csv`, `hypothesis_backlog.csv`, `research_questions.md`, `recommendation_cards.json`)
 10. write review and eval outputs (`annotation_pack.csv`, `annotation_guidelines.md`, `eval_report.md`, `ranking_stability.json`, `benchmark_leakage_report.json`, optional `reviewer_agreement_summary.json`)
-11. compute and write `summary_stats.json`
-12. write `summary_report.md`
-13. optionally write `validation_report.md`
+11. write contract artifacts (`case_plan.md`, `workstream_registry.json`, `workstream_status.md`, `agent_plan.json`, `agent_execution_log.json`, `agent_handoff_log.json`, `artifact_inventory.json`)
+12. compute and write `summary_stats.json`
+13. write `summary_report.md`
+14. optionally write `validation_report.md`
 
 ### Phase 3a - Optional state store and history
 
 Implemented in `tools/state_store.py` and `tools/history.py`.
 
 - Additive to the existing file-based outputs
-- Persists runs, posts, issues, evidence, sources, issue run metrics, entities, issue-entity links, benchmark documents, benchmark claims, and contradiction records
+- Persists runs, posts, issues, evidence, sources, issue run metrics, entities, issue-entity links, benchmark documents, benchmark claims, contradiction records, and reviewer decisions
 - Supports local persistence with SQLite by default and DuckDB when available
 - Writes `run_manifest.json`
 - Writes `history_diff.md` and `history_summary.json` when history is enabled
+- Makes issue lifecycle state explicit and allows prior reviewer overrides to be retrieved on later runs
 - Designed so reruns update deduplicated records instead of multiplying identical post/evidence rows
 
 ### Decision layer
@@ -240,6 +247,7 @@ It compares detected category rankings against the user-provided references in `
 
 - `tools/config.py`: parse YAML, validate required fields, define dataclasses and constants
 - `tools/run.py`: CLI entrypoint, orchestration, checkpoints, final summary
+- `tools/program_contract.py`: case/workstream artifacts, role registry, and artifact inventory generation
 - `tools/youtube.py`: channel discovery, video selection, comment extraction, quota tracking
 - `tools/reddit.py`: subreddit search plus recursive comment traversal
 - `tools/twitter.py`: Twitter recent-search ingestion with bearer-token auth and retry logic

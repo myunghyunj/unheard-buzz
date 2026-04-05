@@ -2,6 +2,8 @@ import json
 import os
 from typing import Dict, List, Optional
 
+from schema_versions import PROGRAM_CONTRACT_VERSION, schema_version
+
 
 def build_eval_metrics(
     issue_layer: dict,
@@ -59,6 +61,10 @@ def build_eval_metrics(
         "volatile_or_declining": sum(
             1 for row in history_rows if row.get("status_label") in {"declining", "disappeared"}
         ),
+        "lifecycle_counts": {
+            label: sum(1 for row in history_rows if row.get("lifecycle_state") == label)
+            for label in sorted({row.get("lifecycle_state", "") for row in history_rows if row.get("lifecycle_state")})
+        },
         "issue_statuses": history_rows,
     }
     ranking_stability["stability_score"] = round(
@@ -88,6 +94,9 @@ def build_eval_metrics(
         "annotation_count": int((review_summary or {}).get("annotation_count", 0) or 0),
         "applied_counts": dict((review_summary or {}).get("applied_counts", {}) or {}),
         "override_rate": float((review_summary or {}).get("override_rate", 0.0) or 0.0),
+        "annotation_sources": dict((review_summary or {}).get("annotation_sources", {}) or {}),
+        "manual_annotation_count": int((review_summary or {}).get("manual_annotation_count", 0) or 0),
+        "memory_annotation_count": int((review_summary or {}).get("memory_annotation_count", 0) or 0),
     }
 
     return {
@@ -120,18 +129,45 @@ def write_eval_outputs(
 
     ranking_stability_path = os.path.join(output_dir, "ranking_stability.json")
     with open(ranking_stability_path, "w", encoding="utf-8") as handle:
-        json.dump(metrics["ranking_stability"], handle, indent=2, ensure_ascii=False)
+        json.dump(
+            {
+                "schema_version": schema_version("ranking_stability"),
+                "program_contract_version": PROGRAM_CONTRACT_VERSION,
+                **metrics["ranking_stability"],
+            },
+            handle,
+            indent=2,
+            ensure_ascii=False,
+        )
     outputs["ranking_stability_json"] = ranking_stability_path
 
     benchmark_leakage_path = os.path.join(output_dir, "benchmark_leakage_report.json")
     with open(benchmark_leakage_path, "w", encoding="utf-8") as handle:
-        json.dump(metrics["benchmark_leakage"], handle, indent=2, ensure_ascii=False)
+        json.dump(
+            {
+                "schema_version": schema_version("benchmark_leakage"),
+                "program_contract_version": PROGRAM_CONTRACT_VERSION,
+                **metrics["benchmark_leakage"],
+            },
+            handle,
+            indent=2,
+            ensure_ascii=False,
+        )
     outputs["benchmark_leakage_report_json"] = benchmark_leakage_path
 
     if metrics["reviewer_agreement"]["annotation_count"] > 0:
         reviewer_agreement_path = os.path.join(output_dir, "reviewer_agreement_summary.json")
         with open(reviewer_agreement_path, "w", encoding="utf-8") as handle:
-            json.dump(metrics["reviewer_agreement"], handle, indent=2, ensure_ascii=False)
+            json.dump(
+                {
+                    "schema_version": schema_version("reviewer_agreement"),
+                    "program_contract_version": PROGRAM_CONTRACT_VERSION,
+                    **metrics["reviewer_agreement"],
+                },
+                handle,
+                indent=2,
+                ensure_ascii=False,
+            )
         outputs["reviewer_agreement_summary_json"] = reviewer_agreement_path
 
     lines = [
@@ -141,6 +177,7 @@ def write_eval_outputs(
         "",
         f"- Stability score: {metrics['ranking_stability']['stability_score']:.2f}",
         f"- Compared issues: {metrics['ranking_stability']['compared_issue_count']}",
+        f"- Lifecycle counts: {metrics['ranking_stability']['lifecycle_counts'] or {}}",
         "",
         "## Provenance Coverage",
         "",
@@ -167,6 +204,8 @@ def write_eval_outputs(
         "",
         f"- Annotation count: {metrics['reviewer_agreement']['annotation_count']}",
         f"- Override rate: {metrics['reviewer_agreement']['override_rate']:.2f}",
+        f"- Manual annotations: {metrics['reviewer_agreement']['manual_annotation_count']}",
+        f"- Reused reviewer memory rows: {metrics['reviewer_agreement']['memory_annotation_count']}",
     ]
     eval_report_path = os.path.join(output_dir, "eval_report.md")
     with open(eval_report_path, "w", encoding="utf-8") as handle:

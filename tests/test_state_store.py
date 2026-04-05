@@ -104,6 +104,25 @@ class StateStoreTest(unittest.TestCase):
 
             store.ingest_run(run_record=run_one, instruction=instruction, posts=filtered, generated_files=generated)
             store.ingest_run(run_record=run_two, instruction=instruction, posts=filtered, generated_files=generated)
+            store.save_reviewer_annotations(
+                project_id=run_one["project_id"],
+                case_id=run_one["case_id"],
+                run_id=run_one["run_id"],
+                annotations=[
+                    {
+                        "record_type": "recommendation",
+                        "record_id": "rec_1",
+                        "field": "confidence_label",
+                        "override_value": "high",
+                        "notes": "Carry forward this decision.",
+                    }
+                ],
+            )
+            remembered = store.latest_reviewer_annotations(
+                project_id=run_two["project_id"],
+                case_id=run_two["case_id"],
+                exclude_run_id=run_two["run_id"],
+            )
 
             runs_count = store.conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
             posts_count = store.conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
@@ -112,6 +131,7 @@ class StateStoreTest(unittest.TestCase):
             entity_count = store.conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
             benchmark_doc_count = store.conn.execute("SELECT COUNT(*) FROM benchmark_documents").fetchone()[0]
             benchmark_claim_count = store.conn.execute("SELECT COUNT(*) FROM benchmark_claims").fetchone()[0]
+            review_decision_count = store.conn.execute("SELECT COUNT(*) FROM review_decisions").fetchone()[0]
 
             self.assertEqual(runs_count, 2)
             self.assertEqual(posts_count, 2)
@@ -120,6 +140,10 @@ class StateStoreTest(unittest.TestCase):
             self.assertGreaterEqual(entity_count, 1)
             self.assertGreaterEqual(benchmark_doc_count, 1)
             self.assertGreaterEqual(benchmark_claim_count, 1)
+            self.assertEqual(review_decision_count, 1)
+            self.assertTrue(run_one["run_id"].startswith("run_20260405T000100Z_"))
+            self.assertEqual(remembered[0]["annotation_origin"], "review_memory")
+            self.assertEqual(remembered[0]["override_value"], "high")
             store.close()
 
 

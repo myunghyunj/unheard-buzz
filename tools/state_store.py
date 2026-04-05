@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 from dataclasses import asdict
+from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Tuple
 
 try:  # pragma: no cover - optional dependency
@@ -12,6 +13,7 @@ except Exception:  # pragma: no cover - optional dependency
     duckdb = None
 
 from config import Instruction, SocialPost, StateStoreConfig
+from schema_versions import PROGRAM_CONTRACT_VERSION, schema_version
 
 
 def _normalize_text(text: str) -> str:
@@ -33,7 +35,12 @@ def default_project_id(instruction: Instruction) -> str:
 
 def build_run_id(project_id: str, completed_at: str, run_label: str = "") -> str:
     seed = f"{project_id}|{completed_at}|{run_label}".encode("utf-8")
-    return f"run_{hashlib.sha1(seed).hexdigest()[:12]}"
+    try:
+        dt = datetime.fromisoformat((completed_at or "").replace("Z", "+00:00")).astimezone(timezone.utc)
+        stamp = dt.strftime("%Y%m%dT%H%M%SZ")
+    except Exception:
+        stamp = "".join(ch for ch in (completed_at or "") if ch.isalnum())[:16] or "unknown"
+    return f"run_{stamp}_{hashlib.sha1(seed).hexdigest()[:8]}"
 
 
 def _load_csv_rows(path: str) -> List[dict]:
@@ -76,12 +83,25 @@ class LocalStateStore:
     def _fetchall(self, sql: str, params: Tuple = ()) -> List[tuple]:
         return self.conn.execute(sql, params).fetchall()
 
+    def _table_columns(self, table: str) -> set:
+        try:
+            rows = self._fetchall(f"PRAGMA table_info('{table}')")
+        except Exception:
+            return set()
+        return {row[1] for row in rows if len(row) > 1}
+
+    def _ensure_column(self, table: str, column: str, definition: str) -> None:
+        if column in self._table_columns(table):
+            return
+        self._execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
     def _ensure_schema(self) -> None:
         statements = [
             """
             CREATE TABLE IF NOT EXISTS runs (
                 run_id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
+                case_id TEXT,
                 run_label TEXT,
                 started_at TEXT,
                 completed_at TEXT,
@@ -89,7 +109,11 @@ class LocalStateStore:
                 git_commit TEXT,
                 output_dir TEXT,
                 requested_backend TEXT,
-                resolved_backend TEXT
+                resolved_backend TEXT,
+                manifest_path TEXT,
+                artifact_inventory_path TEXT,
+                schema_version TEXT,
+                program_contract_version TEXT
             )
             """,
             """
@@ -179,6 +203,8 @@ class LocalStateStore:
                 priority_score REAL,
                 delta_vs_prev REAL,
                 status_label TEXT,
+                lifecycle_state TEXT,
+                transition_reason TEXT,
                 PRIMARY KEY (project_id, canonical_issue_id, run_id)
             )
             """,
@@ -267,9 +293,33 @@ class LocalStateStore:
                 PRIMARY KEY (project_id, contradiction_id)
             )
             """,
+            """
+            CREATE TABLE IF NOT EXISTS review_decisions (
+                project_id TEXT NOT NULL,
+                case_id TEXT,
+                record_type TEXT NOT NULL,
+                record_id TEXT NOT NULL,
+                field TEXT NOT NULL,
+                override_value TEXT,
+                notes TEXT,
+                annotation_origin TEXT,
+                source_path TEXT,
+                latest_run_id TEXT NOT NULL,
+                first_seen_run_id TEXT,
+                last_seen_run_id TEXT,
+                PRIMARY KEY (project_id, record_type, record_id, field)
+            )
+            """,
         ]
         for statement in statements:
             self._execute(statement)
+        self._ensure_column("runs", "case_id", "TEXT")
+        self._ensure_column("runs", "manifest_path", "TEXT")
+        self._ensure_column("runs", "artifact_inventory_path", "TEXT")
+        self._ensure_column("runs", "schema_version", "TEXT")
+        self._ensure_column("runs", "program_contract_version", "TEXT")
+        self._ensure_column("issue_run_metrics", "lifecycle_state", "TEXT")
+        self._ensure_column("issue_run_metrics", "transition_reason", "TEXT")
         self.conn.commit()
 
     def ingest_run(
@@ -294,11 +344,13 @@ class LocalStateStore:
         self._execute(
             """
             INSERT INTO runs (
-                run_id, project_id, run_label, started_at, completed_at, instruction_hash,
-                git_commit, output_dir, requested_backend, resolved_backend
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                run_id, project_id, case_id, run_label, started_at, completed_at, instruction_hash,
+                git_commit, output_dir, requested_backend, resolved_backend, manifest_path,
+                artifact_inventory_path, schema_version, program_contract_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id) DO UPDATE SET
                 project_id=excluded.project_id,
+                case_id=excluded.case_id,
                 run_label=excluded.run_label,
                 started_at=excluded.started_at,
                 completed_at=excluded.completed_at,
@@ -306,11 +358,16 @@ class LocalStateStore:
                 git_commit=excluded.git_commit,
                 output_dir=excluded.output_dir,
                 requested_backend=excluded.requested_backend,
-                resolved_backend=excluded.resolved_backend
+                resolved_backend=excluded.resolved_backend,
+                manifest_path=excluded.manifest_path,
+                artifact_inventory_path=excluded.artifact_inventory_path,
+                schema_version=excluded.schema_version,
+                program_contract_version=excluded.program_contract_version
             """,
             (
                 run_id,
                 project_id,
+                run_record.get("case_id", ""),
                 run_record.get("run_label", ""),
                 run_record.get("started_at", ""),
                 run_record.get("completed_at", ""),
@@ -319,6 +376,10 @@ class LocalStateStore:
                 run_record.get("output_dir", ""),
                 run_record.get("requested_backend", self.requested_backend),
                 run_record.get("resolved_backend", self.resolved_backend),
+                run_record.get("manifest_path", ""),
+                run_record.get("artifact_inventory_path", ""),
+                run_record.get("schema_version", schema_version("run_manifest")),
+                run_record.get("program_contract_version", PROGRAM_CONTRACT_VERSION),
             ),
         )
 
@@ -436,14 +497,16 @@ class LocalStateStore:
                 """
                 INSERT INTO issue_run_metrics (
                     project_id, canonical_issue_id, run_id, evidence_count, independent_source_count,
-                    priority_score, delta_vs_prev, status_label
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    priority_score, delta_vs_prev, status_label, lifecycle_state, transition_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(project_id, canonical_issue_id, run_id) DO UPDATE SET
                     evidence_count=excluded.evidence_count,
                     independent_source_count=excluded.independent_source_count,
                     priority_score=excluded.priority_score,
                     delta_vs_prev=excluded.delta_vs_prev,
-                    status_label=excluded.status_label
+                    status_label=excluded.status_label,
+                    lifecycle_state=excluded.lifecycle_state,
+                    transition_reason=excluded.transition_reason
                 """,
                 (
                     project_id,
@@ -453,6 +516,8 @@ class LocalStateStore:
                     int(issue.get("independent_source_count", 0) or 0),
                     float(issue.get("priority_score", 0.0) or 0.0),
                     None,
+                    "",
+                    "",
                     "",
                 ),
             )
@@ -760,18 +825,123 @@ class LocalStateStore:
             self._execute(
                 """
                 UPDATE issue_run_metrics
-                SET delta_vs_prev = ?, status_label = ?
+                SET delta_vs_prev = ?, status_label = ?, lifecycle_state = ?, transition_reason = ?
                 WHERE project_id = ? AND canonical_issue_id = ? AND run_id = ?
                 """,
                 (
                     float(row.get("delta_vs_prev", 0.0) or 0.0),
                     row.get("status_label", ""),
+                    row.get("lifecycle_state", ""),
+                    row.get("transition_reason", ""),
                     project_id,
                     row.get("canonical_issue_id", ""),
                     run_id,
                 ),
             )
         self.conn.commit()
+
+    def update_run_artifacts(
+        self,
+        *,
+        run_id: str,
+        manifest_path: str = "",
+        artifact_inventory_path: str = "",
+        completed_at: str = "",
+    ) -> None:
+        self._execute(
+            """
+            UPDATE runs
+            SET manifest_path = ?, artifact_inventory_path = ?, completed_at = COALESCE(NULLIF(?, ''), completed_at)
+            WHERE run_id = ?
+            """,
+            (manifest_path, artifact_inventory_path, completed_at, run_id),
+        )
+        self.conn.commit()
+
+    def save_reviewer_annotations(
+        self,
+        *,
+        project_id: str,
+        case_id: str,
+        run_id: str,
+        annotations: List[dict],
+        source_path: str = "input/reviewer_annotations.csv",
+    ) -> None:
+        for row in annotations:
+            record_type = str(row.get("record_type", "") or "").strip()
+            record_id = str(row.get("record_id", "") or "").strip()
+            field = str(row.get("field", "") or "").strip()
+            if not record_type or not record_id or not field:
+                continue
+            self._execute(
+                """
+                INSERT INTO review_decisions (
+                    project_id, case_id, record_type, record_id, field, override_value, notes,
+                    annotation_origin, source_path, latest_run_id, first_seen_run_id, last_seen_run_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(project_id, record_type, record_id, field) DO UPDATE SET
+                    case_id=excluded.case_id,
+                    override_value=excluded.override_value,
+                    notes=excluded.notes,
+                    annotation_origin=excluded.annotation_origin,
+                    source_path=excluded.source_path,
+                    latest_run_id=excluded.latest_run_id,
+                    last_seen_run_id=excluded.last_seen_run_id
+                """,
+                (
+                    project_id,
+                    case_id,
+                    record_type,
+                    record_id,
+                    field,
+                    row.get("override_value", ""),
+                    row.get("notes", ""),
+                    row.get("annotation_origin", "manual_csv"),
+                    source_path,
+                    run_id,
+                    run_id,
+                    run_id,
+                ),
+            )
+        self.conn.commit()
+
+    def latest_reviewer_annotations(
+        self,
+        *,
+        project_id: str,
+        case_id: str = "",
+        exclude_run_id: str = "",
+        limit: int = 200,
+    ) -> List[dict]:
+        sql = """
+            SELECT record_type, record_id, field, override_value, notes, annotation_origin, source_path, last_seen_run_id
+            FROM review_decisions
+            WHERE project_id = ?
+        """
+        params: List = [project_id]
+        if case_id:
+            sql += " AND case_id = ?"
+            params.append(case_id)
+        if exclude_run_id:
+            sql += " AND last_seen_run_id != ?"
+            params.append(exclude_run_id)
+        sql += " ORDER BY last_seen_run_id DESC, record_type ASC, record_id ASC LIMIT ?"
+        params.append(int(max(1, limit)))
+        rows = self._fetchall(sql, tuple(params))
+        return [
+            {
+                "record_type": row[0] or "",
+                "record_id": row[1] or "",
+                "field": row[2] or "",
+                "override_value": row[3] or "",
+                "notes": row[4] or "",
+                "annotation_origin": "review_memory",
+                "stored_annotation_origin": row[5] or "",
+                "source_path": row[6] or "",
+                "source_run_id": row[7] or "",
+            }
+            for row in rows
+        ]
 
 
 def build_run_record(
@@ -788,9 +958,13 @@ def build_run_record(
 ) -> Dict[str, str]:
     project_id = (project_id_override or default_project_id(instruction)).strip()
     run_id = build_run_id(project_id, completed_at, run_label)
+    case_id = (instruction.case.case_id or "").strip() or project_id
     return {
+        "schema_version": schema_version("run_manifest"),
+        "program_contract_version": PROGRAM_CONTRACT_VERSION,
         "run_id": run_id,
         "project_id": project_id,
+        "case_id": case_id,
         "run_label": run_label,
         "started_at": started_at,
         "completed_at": completed_at,

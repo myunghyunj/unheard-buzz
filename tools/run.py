@@ -18,7 +18,9 @@ from dotenv import load_dotenv
 
 from config import Instruction, SocialPost, load_instruction, OUTPUT_DIR
 from analyzer import filter_posts, posts_for_stats
-from reports import generate_all, generate_strategy_outputs
+from program_contract import case_identity, normalized_workstreams, write_contract_artifacts
+from reports import augment_summary_outputs_with_history, generate_all, generate_strategy_outputs
+from review_pack import load_reviewer_annotations, merge_reviewer_annotations
 
 
 def _save_checkpoint(phase: str, data: dict, output_dir: str) -> str:
@@ -262,6 +264,51 @@ def _summarize_trend_direction(trends_result: Optional[dict]) -> str:
     return "mixed"
 
 
+def _write_run_manifest(
+    *,
+    run_record: dict,
+    instruction: Instruction,
+    output_dir: str,
+    generated_files: Dict[str, str],
+    platform_stats: Dict[str, int],
+    platform_errors: Dict[str, str],
+    history_data: Optional[dict] = None,
+    ingest_summary: Optional[dict] = None,
+    reviewer_memory_summary: Optional[dict] = None,
+    state_enabled: bool = False,
+    requested_backend: str = "",
+    resolved_backend: str = "",
+) -> str:
+    manifest = dict(run_record)
+    manifest["case_id"] = case_identity(instruction)["case_id"]
+    manifest["enabled_connectors"] = list(instruction.enabled_platforms)
+    manifest["workstreams"] = normalized_workstreams(instruction)
+    manifest["state_store"] = {
+        "enabled": bool(state_enabled),
+        "requested_backend": requested_backend or instruction.state_store.backend,
+        "resolved_backend": resolved_backend or (instruction.state_store.backend if state_enabled else "disabled"),
+        "path": instruction.state_store.path if state_enabled else "",
+    }
+    manifest["history_enabled"] = instruction.history.enabled
+    manifest["history_summary"] = (history_data or {}).get("summary", {})
+    manifest["lifecycle_summary"] = (history_data or {}).get("lifecycle_summary", {})
+    manifest["platform_stats"] = dict(platform_stats)
+    manifest["platform_errors"] = dict(platform_errors)
+    manifest["ingest_summary"] = dict(ingest_summary or {})
+    manifest["reviewer_memory"] = dict(reviewer_memory_summary or {})
+    manifest["artifact_inventory_path"] = generated_files.get("artifact_inventory_json", "")
+    manifest["generated_files"] = {
+        key: path
+        for key, path in sorted(generated_files.items())
+    }
+    manifest["warnings"] = sorted(platform_errors.keys())
+    manifest["partial_failures"] = dict(platform_errors)
+    manifest_path = os.path.join(output_dir, "run_manifest.json")
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2, ensure_ascii=False)
+    return manifest_path
+
+
 def run_pipeline(
     instruction: Instruction,
     platforms_override: Optional[List[str]] = None,
@@ -430,6 +477,12 @@ def run_pipeline(
     print()
 
     state_outputs: Dict[str, str] = {}
+    run_record: Optional[dict] = None
+    history_data: dict = {}
+    ingest_summary: dict = {}
+    reviewer_memory_summary: dict = {}
+    resolved_backend = "disabled"
+    store = None
     state_enabled = instruction.state_store.enabled and not no_state
     if state_enabled:
         print("=" * 60)
@@ -440,6 +493,7 @@ def run_pipeline(
             from state_store import LocalStateStore, build_run_record
 
             store = LocalStateStore(instruction.state_store)
+            resolved_backend = store.resolved_backend
             completed_at_iso = datetime.now(timezone.utc).isoformat()
             run_record = build_run_record(
                 instruction=instruction,
@@ -458,7 +512,27 @@ def run_pipeline(
                 posts=all_posts,
                 generated_files=generated,
             )
-            history_data = {}
+            current_annotations = load_reviewer_annotations()
+            if current_annotations:
+                store.save_reviewer_annotations(
+                    project_id=run_record["project_id"],
+                    case_id=run_record.get("case_id", ""),
+                    run_id=run_record["run_id"],
+                    annotations=current_annotations,
+                )
+            remembered_annotations = store.latest_reviewer_annotations(
+                project_id=run_record["project_id"],
+                case_id=run_record.get("case_id", ""),
+                exclude_run_id=run_record["run_id"],
+            )
+            merged_annotations = merge_reviewer_annotations(current_annotations, remembered_annotations)
+            reviewer_memory_summary = {
+                "manual_annotations": len(current_annotations),
+                "reused_memory_annotations": sum(
+                    1 for row in merged_annotations if row.get("annotation_origin") == "review_memory"
+                ),
+                "effective_annotations": len(merged_annotations),
+            }
             if instruction.history.enabled:
                 history_data = compute_history_delta(
                     store,
@@ -473,30 +547,30 @@ def run_pipeline(
                         emit_diff_report=instruction.history.emit_diff_report,
                     )
                 )
+                generated.update(
+                    augment_summary_outputs_with_history(
+                        instruction,
+                        output_dir,
+                        history_data,
+                    )
+                )
             refreshed_strategy_outputs = generate_strategy_outputs(
                 all_posts,
                 instruction,
                 output_dir,
                 history_data=history_data,
+                reviewer_annotations=merged_annotations,
             )
             generated.update(refreshed_strategy_outputs)
-
-            manifest = dict(run_record)
-            manifest["ingest_summary"] = ingest_summary
-            manifest["history_enabled"] = instruction.history.enabled
-            manifest["history_summary"] = history_data.get("summary", {}) if history_data else {}
-            manifest_path = os.path.join(output_dir, "run_manifest.json")
-            with open(manifest_path, "w", encoding="utf-8") as handle:
-                json.dump(manifest, handle, indent=2, ensure_ascii=False)
-            state_outputs["run_manifest_json"] = manifest_path
-
-            store.close()
             generated.update(state_outputs)
             for name, path in state_outputs.items():
                 print(f"  {name}: {path}")
         except Exception as e:
             print(f"  State/history phase skipped: {e}")
             traceback.print_exc()
+            if store is not None:
+                store.close()
+                store = None
         print()
 
     if instruction.visualization.enabled:
@@ -524,6 +598,69 @@ def run_pipeline(
         else:
             print("  Validation report was not generated.")
         print()
+
+    completed_at_iso = datetime.now(timezone.utc).isoformat()
+    if run_record is None:
+        from state_store import build_run_record
+
+        run_record = build_run_record(
+            instruction=instruction,
+            output_dir=output_dir,
+            started_at=started_at_iso,
+            completed_at=completed_at_iso,
+            git_commit=_git_commit(),
+            run_label=run_label,
+            project_id_override=project_id_override,
+            requested_backend=instruction.state_store.backend,
+            resolved_backend=resolved_backend,
+        )
+    else:
+        run_record["completed_at"] = completed_at_iso
+
+    generated.update(write_contract_artifacts(instruction, generated, output_dir, run_record=run_record))
+    manifest_path = _write_run_manifest(
+        run_record=run_record,
+        instruction=instruction,
+        output_dir=output_dir,
+        generated_files=generated,
+        platform_stats=platform_stats,
+        platform_errors=platform_errors,
+        history_data=history_data,
+        ingest_summary=ingest_summary,
+        reviewer_memory_summary=reviewer_memory_summary,
+        state_enabled=state_enabled,
+        requested_backend=instruction.state_store.backend,
+        resolved_backend=resolved_backend,
+    )
+    generated["run_manifest_json"] = manifest_path
+    generated.update(write_contract_artifacts(instruction, generated, output_dir, run_record=run_record))
+    manifest_path = _write_run_manifest(
+        run_record=run_record,
+        instruction=instruction,
+        output_dir=output_dir,
+        generated_files=generated,
+        platform_stats=platform_stats,
+        platform_errors=platform_errors,
+        history_data=history_data,
+        ingest_summary=ingest_summary,
+        reviewer_memory_summary=reviewer_memory_summary,
+        state_enabled=state_enabled,
+        requested_backend=instruction.state_store.backend,
+        resolved_backend=resolved_backend,
+    )
+    generated["run_manifest_json"] = manifest_path
+    print(f"  run_manifest_json: {manifest_path}")
+    print(f"  artifact_inventory_json: {generated.get('artifact_inventory_json', '')}")
+    if store is not None:
+        try:
+            store.update_run_artifacts(
+                run_id=run_record["run_id"],
+                manifest_path=manifest_path,
+                artifact_inventory_path=generated.get("artifact_inventory_json", ""),
+                completed_at=run_record.get("completed_at", ""),
+            )
+        finally:
+            store.close()
 
     elapsed = time.time() - start_time
     trend_direction = _summarize_trend_direction(trends_result)
@@ -632,6 +769,8 @@ def _dry_run(instruction: Instruction, platforms: List[str], output_dir: str):
     print(f"Include irrelevant in stats: {instruction.include_irrelevant_in_stats}")
     print(f"Quote count: {instruction.reporting.quote_count}")
     print(f"Max co-occurrence pairs: {instruction.reporting.max_cooccurrence_pairs}")
+    print(f"Case: {case_identity(instruction)['case_id']}")
+    print(f"Workstreams: {', '.join(ws['workstream_id'] for ws in normalized_workstreams(instruction))}")
     print(f"State store: {'enabled' if instruction.state_store.enabled else 'disabled'}")
     if instruction.state_store.enabled:
         print(f"State backend: {instruction.state_store.backend}")

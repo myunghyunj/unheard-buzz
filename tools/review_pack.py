@@ -4,6 +4,8 @@ import os
 from collections import Counter, defaultdict
 from typing import Dict, List
 
+from schema_versions import PROGRAM_CONTRACT_VERSION, schema_version
+
 
 ANNOTATION_FIELDS = [
     "record_type",
@@ -14,17 +16,61 @@ ANNOTATION_FIELDS = [
 ]
 
 
+def _default_field(record_type: str) -> str:
+    return {
+        "issue": "cluster_id",
+        "entity_link": "entity_id",
+        "recommendation": "confidence_label",
+        "contradiction": "status",
+    }.get(record_type, "override")
+
+
+def normalize_reviewer_annotations(annotations: List[dict], annotation_origin: str = "manual_csv") -> List[dict]:
+    normalized: List[dict] = []
+    for row in annotations or []:
+        record_type = str(row.get("record_type", "") or "").strip()
+        record_id = str(row.get("record_id", "") or "").strip()
+        if not record_type or not record_id:
+            continue
+        normalized.append(
+            {
+                "record_type": record_type,
+                "record_id": record_id,
+                "field": str(row.get("field", "") or _default_field(record_type)).strip(),
+                "override_value": str(row.get("override_value", "") or "").strip(),
+                "notes": str(row.get("notes", "") or "").strip(),
+                "annotation_origin": str(row.get("annotation_origin", "") or annotation_origin).strip(),
+                "source_run_id": str(row.get("source_run_id", "") or "").strip(),
+                "stored_annotation_origin": str(row.get("stored_annotation_origin", "") or "").strip(),
+                "source_path": str(row.get("source_path", "") or "").strip(),
+            }
+        )
+    return normalized
+
+
+def merge_reviewer_annotations(primary_annotations: List[dict], fallback_annotations: List[dict]) -> List[dict]:
+    merged: List[dict] = []
+    seen = set()
+    for row in normalize_reviewer_annotations(primary_annotations) + normalize_reviewer_annotations(fallback_annotations):
+        key = (row.get("record_type", ""), row.get("record_id", ""), row.get("field", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(row)
+    return merged
+
+
 def load_reviewer_annotations(path: str = "input/reviewer_annotations.csv") -> List[dict]:
     if not path or not os.path.exists(path):
         return []
     with open(path, "r", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
-        return [row for row in reader]
+        return normalize_reviewer_annotations([row for row in reader], annotation_origin="manual_csv")
 
 
 def _annotation_index(annotations: List[dict]) -> Dict[str, List[dict]]:
     indexed: Dict[str, List[dict]] = defaultdict(list)
-    for row in annotations:
+    for row in normalize_reviewer_annotations(annotations):
         indexed[f"{row.get('record_type', '')}:{row.get('record_id', '')}"].append(row)
     return indexed
 
@@ -36,12 +82,14 @@ def apply_reviewer_overrides(
     benchmark_pack: dict,
     annotations: List[dict],
 ) -> dict:
+    annotations = normalize_reviewer_annotations(annotations)
     overridden_issues = copy.deepcopy(issue_layer)
     overridden_decision = copy.deepcopy(decision_pack)
     overridden_entities = copy.deepcopy(entity_layer)
     overridden_benchmarks = copy.deepcopy(benchmark_pack)
     dismissed_contradictions = set()
     applied_counts: Counter = Counter()
+    source_counts = Counter(row.get("annotation_origin", "unknown") for row in annotations)
 
     recommendations_by_id = {
         row.get("recommendation_id", ""): row
@@ -124,6 +172,9 @@ def apply_reviewer_overrides(
             "applied_counts": dict(applied_counts),
             "dismissed_contradictions": sorted(dismissed_contradictions),
             "override_rate": round(sum(applied_counts.values()) / max(1, len(annotations)), 4),
+            "annotation_sources": dict(source_counts),
+            "manual_annotation_count": int(source_counts.get("manual_csv", 0)),
+            "memory_annotation_count": int(source_counts.get("review_memory", 0)),
         },
     }
 
@@ -149,6 +200,7 @@ def write_review_pack(
         override_rows = annotation_index.get(f"issue:{record_id}", [])
         rows.append(
             {
+                "schema_version": schema_version("review_decision"),
                 "record_type": "issue",
                 "record_id": record_id,
                 "canonical_issue_id": record_id,
@@ -158,6 +210,7 @@ def write_review_pack(
                 "current_value": getattr(issue, "normalized_problem_statement", ""),
                 "supporting_evidence_ids": evidence_ids_by_issue.get(record_id, ""),
                 "reviewer_override": override_rows[0].get("override_value", "") if override_rows else "",
+                "annotation_origin": override_rows[0].get("annotation_origin", "") if override_rows else "",
                 "notes": override_rows[0].get("notes", "") if override_rows else "",
             }
         )
@@ -167,6 +220,7 @@ def write_review_pack(
         override_rows = annotation_index.get(f"entity_link:{record_id}", [])
         rows.append(
             {
+                "schema_version": schema_version("review_decision"),
                 "record_type": "entity_link",
                 "record_id": record_id,
                 "canonical_issue_id": link.get("canonical_issue_id", ""),
@@ -176,6 +230,7 @@ def write_review_pack(
                 "current_value": link.get("canonical_name", ""),
                 "supporting_evidence_ids": evidence_ids_by_issue.get(link.get("canonical_issue_id", ""), ""),
                 "reviewer_override": override_rows[0].get("override_value", "") if override_rows else "",
+                "annotation_origin": override_rows[0].get("annotation_origin", "") if override_rows else "",
                 "notes": override_rows[0].get("notes", "") if override_rows else "",
             }
         )
@@ -185,6 +240,7 @@ def write_review_pack(
         override_rows = annotation_index.get(f"contradiction:{record_id}", [])
         rows.append(
             {
+                "schema_version": schema_version("review_decision"),
                 "record_type": "contradiction",
                 "record_id": record_id,
                 "canonical_issue_id": contradiction.get("canonical_issue_id", ""),
@@ -194,6 +250,7 @@ def write_review_pack(
                 "current_value": contradiction.get("summary", ""),
                 "supporting_evidence_ids": evidence_ids_by_issue.get(contradiction.get("canonical_issue_id", ""), ""),
                 "reviewer_override": override_rows[0].get("override_value", "") if override_rows else "",
+                "annotation_origin": override_rows[0].get("annotation_origin", "") if override_rows else "",
                 "notes": override_rows[0].get("notes", "") if override_rows else "",
             }
         )
@@ -203,6 +260,7 @@ def write_review_pack(
         override_rows = annotation_index.get(f"recommendation:{record_id}", [])
         rows.append(
             {
+                "schema_version": schema_version("review_decision"),
                 "record_type": "recommendation",
                 "record_id": record_id,
                 "canonical_issue_id": "|".join(recommendation.get("supporting_issue_ids", [])),
@@ -212,6 +270,7 @@ def write_review_pack(
                 "current_value": recommendation.get("confidence_label", ""),
                 "supporting_evidence_ids": "|".join(recommendation.get("supporting_evidence_ids", [])),
                 "reviewer_override": override_rows[0].get("override_value", "") if override_rows else "",
+                "annotation_origin": override_rows[0].get("annotation_origin", "") if override_rows else "",
                 "notes": override_rows[0].get("notes", "") if override_rows else "",
             }
         )
@@ -221,6 +280,7 @@ def write_review_pack(
         writer = csv.DictWriter(
             handle,
             fieldnames=[
+                "schema_version",
                 "record_type",
                 "record_id",
                 "canonical_issue_id",
@@ -230,6 +290,7 @@ def write_review_pack(
                 "current_value",
                 "supporting_evidence_ids",
                 "reviewer_override",
+                "annotation_origin",
                 "notes",
             ],
         )
@@ -239,6 +300,9 @@ def write_review_pack(
 
     guidelines_lines = [
         "# Annotation Guidelines",
+        "",
+        f"- Program contract: `{PROGRAM_CONTRACT_VERSION}`",
+        f"- Schema version: `{schema_version('review_decision')}`",
         "",
         "Use `record_type`, `record_id`, `field`, and `override_value` in `input/reviewer_annotations.csv`.",
         "",
@@ -252,6 +316,7 @@ def write_review_pack(
         "## Notes",
         "",
         "- Overrides update derived outputs only; base issue/evidence records are preserved.",
+        "- When state store is enabled, prior reviewer overrides can be retrieved and reused as reviewer memory.",
         "- Keep notes concise so audit trails remain readable.",
         "- Prefer correcting only the highest-impact rows first.",
     ]

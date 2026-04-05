@@ -110,6 +110,50 @@ class BenchmarkConfig:
     entity_aliases: Dict[str, List[str]] = field(default_factory=dict)
 
 
+@dataclass
+class CaseConfig:
+    case_id: str = ""
+    case_name: str = ""
+    client: str = ""
+    market_scope: str = ""
+    geography: str = ""
+    time_horizon: str = ""
+    decision_objective: str = ""
+    target_deliverables: List[str] = field(default_factory=list)
+    allowed_sources: List[str] = field(default_factory=list)
+    excluded_sources: List[str] = field(default_factory=list)
+    risk_notes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class WorkstreamConfig:
+    workstream_id: str = ""
+    name: str = ""
+    objective: str = ""
+    primary_agent_role: str = "issue_analyst"
+    fallback_role: str = "orchestrator"
+    handoff_inputs: List[str] = field(default_factory=list)
+    handoff_outputs: List[str] = field(default_factory=list)
+    stop_conditions: List[str] = field(default_factory=list)
+    status: str = "planned"
+    enabled: bool = True
+
+
+@dataclass
+class AgentControlConfig:
+    enabled: bool = True
+    max_parallel_roles: int = 4
+    default_time_budget_minutes: int = 45
+    default_retry_budget: int = 2
+    default_confidence_threshold: float = 0.65
+    allow_external_search: bool = True
+    escalation_triggers: List[str] = field(default_factory=lambda: [
+        "low_evidence_coverage",
+        "benchmark_contradiction_veto",
+        "sensitive_recommendation",
+    ])
+
+
 # ---------------------------------------------------------------------------
 # Unified instruction
 # ---------------------------------------------------------------------------
@@ -141,6 +185,9 @@ class Instruction:
     state_store: "StateStoreConfig" = field(default_factory=lambda: StateStoreConfig())
     history: "HistoryConfig" = field(default_factory=lambda: HistoryConfig())
     benchmarks: "BenchmarkConfig" = field(default_factory=lambda: BenchmarkConfig())
+    case: "CaseConfig" = field(default_factory=lambda: CaseConfig())
+    workstreams: List["WorkstreamConfig"] = field(default_factory=list)
+    agent_control: "AgentControlConfig" = field(default_factory=lambda: AgentControlConfig())
     # Platform configs
     youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
     reddit: RedditConfig = field(default_factory=RedditConfig)
@@ -350,6 +397,52 @@ def load_instruction(yaml_path: str) -> Instruction:
         enabled=bool(history.get("enabled", False)),
         lookback_runs=int(history.get("lookback_runs", 5)),
         emit_diff_report=bool(history.get("emit_diff_report", True)),
+    )
+    case = raw.get("case", {})
+    instr.case = CaseConfig(
+        case_id=str(case.get("id", "") or "").strip(),
+        case_name=str(case.get("name", "") or project.get("name", "")).strip(),
+        client=str(case.get("client", "") or "").strip(),
+        market_scope=str(case.get("market_scope", "") or "").strip(),
+        geography=str(case.get("geography", "") or "").strip(),
+        time_horizon=str(case.get("time_horizon", "") or "").strip(),
+        decision_objective=str(case.get("decision_objective", "") or "").strip(),
+        target_deliverables=[str(item) for item in case.get("target_deliverables", []) if str(item).strip()],
+        allowed_sources=[str(item) for item in case.get("allowed_sources", []) if str(item).strip()],
+        excluded_sources=[str(item) for item in case.get("excluded_sources", []) if str(item).strip()],
+        risk_notes=[str(item) for item in case.get("risk_notes", []) if str(item).strip()],
+    )
+    workstreams = raw.get("workstreams", [])
+    instr.workstreams = []
+    for row in workstreams if isinstance(workstreams, list) else []:
+        if not isinstance(row, dict):
+            continue
+        instr.workstreams.append(
+            WorkstreamConfig(
+                workstream_id=str(row.get("id", "") or "").strip(),
+                name=str(row.get("name", "") or "").strip(),
+                objective=str(row.get("objective", "") or "").strip(),
+                primary_agent_role=str(row.get("primary_agent_role", "issue_analyst") or "issue_analyst").strip(),
+                fallback_role=str(row.get("fallback_role", "orchestrator") or "orchestrator").strip(),
+                handoff_inputs=[str(item) for item in row.get("handoff_inputs", []) if str(item).strip()],
+                handoff_outputs=[str(item) for item in row.get("handoff_outputs", []) if str(item).strip()],
+                stop_conditions=[str(item) for item in row.get("stop_conditions", []) if str(item).strip()],
+                status=str(row.get("status", "planned") or "planned").strip(),
+                enabled=bool(row.get("enabled", True)),
+            )
+        )
+    agent_control = raw.get("agent_control", {})
+    instr.agent_control = AgentControlConfig(
+        enabled=bool(agent_control.get("enabled", True)),
+        max_parallel_roles=int(agent_control.get("max_parallel_roles", 4)),
+        default_time_budget_minutes=int(agent_control.get("default_time_budget_minutes", 45)),
+        default_retry_budget=int(agent_control.get("default_retry_budget", 2)),
+        default_confidence_threshold=float(agent_control.get("default_confidence_threshold", 0.65)),
+        allow_external_search=bool(agent_control.get("allow_external_search", True)),
+        escalation_triggers=[
+            str(item) for item in agent_control.get("escalation_triggers", AgentControlConfig().escalation_triggers)
+            if str(item).strip()
+        ],
     )
     benchmarks = raw.get("benchmarks", {})
     alternatives = benchmarks.get("alternatives", {}) if isinstance(benchmarks, dict) else {}

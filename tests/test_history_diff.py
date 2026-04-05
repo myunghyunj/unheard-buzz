@@ -136,16 +136,22 @@ class HistoryDiffTest(unittest.TestCase):
 
             self.assertTrue(os.path.exists(outputs["history_summary_json"]))
             self.assertTrue(os.path.exists(outputs["history_diff_md"]))
+            self.assertEqual(history_data["schema_version"], "1.0")
             self.assertEqual(history_data["previous_run_id"], run_one["run_id"])
             self.assertGreaterEqual(history_data["summary"].get("rising", 0), 1)
             self.assertGreaterEqual(history_data["summary"].get("new", 0), 1)
             self.assertGreaterEqual(history_data["summary"].get("disappeared", 0), 1)
+            self.assertTrue(history_data["lifecycle_summary"])
+            self.assertTrue(any(row.get("lifecycle_state") == "dormant" for row in history_data["issues"]))
+            self.assertTrue(any(row.get("transition_reason") for row in history_data["issues"]))
 
             with open(outputs["history_diff_md"], "r", encoding="utf-8") as handle:
                 diff_text = handle.read()
             self.assertIn("History Diff", diff_text)
+            self.assertIn("## Lifecycle", diff_text)
             self.assertIn("rising", diff_text)
             self.assertIn("disappeared", diff_text)
+            self.assertIn("Top Movers", diff_text)
             store.close()
 
 

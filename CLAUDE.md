@@ -8,39 +8,40 @@ Open that file when you need internals, debugging details, data flow, or extensi
 
 ## Mission
 
-Help users discover unmet market needs by mining social media platforms and summarizing the findings in a way that is useful for product, GTM, and research decisions.
+Help users run evidence-backed consulting cases that turn public signals into issue intelligence, benchmark context, contradictions, recommendations, review packs, and repeatable case memory.
 
 ## Default workflow
 
-1. Interview the user one question at a time.
+1. Clarify the case, decision objective, and workstreams.
 2. Generate or update `instruction.yaml`.
 3. Ensure `.env` contains the required API keys.
-4. Run the pipeline.
-5. Read the generated reports in `output/`.
-6. Summarize findings with real user quotes first, then patterns and next steps.
+4. Run the pipeline with state/history when appropriate.
+5. Read the generated issue, benchmark, decision, review, eval, and dashboard artifacts in `output/`.
+6. Summarize findings by separating evidence, inference, recommendation, and open questions.
 
 ## Parallel-agent posture
 
 Once the brief is stable, prefer a small parallel swarm instead of one giant thread.
 
-- `search` agent: expand channels, subreddits, queries, and external benchmark checks
-- `analysis` agent: inspect `summary_stats.json`, coded exports, checkpoints, and platform contrasts
-- `writing` agent: draft the user-facing memo with quotes first, then patterns and next steps
-- `graphics` agent: create charts in `output/visualizations/` from the generated artifacts and export `svg` plus `png`, with `ai` when Illustrator editing is part of the workflow
+- `source_scout` agent: expand channels, subreddits, queries, and benchmark sources
+- `issue_analyst` agent: inspect `issue_registry.csv`, `evidence_registry.csv`, and `dashboard_data.json`
+- `benchmark_analyst` agent: inspect `benchmark_coverage.json`, `contradiction_registry.csv`, and alternatives
+- `skeptic` agent: challenge recommendation quality, contradiction handling, and evidence sufficiency
+- `writer` agent: draft the memo with explicit evidence/inference/recommendation separation
+- `reviewer` agent: use `annotation_pack.csv` and review guidelines
+- `graphics` agent: optional polish role after built-in dashboards already exist
 
-Keep one orchestrator agent responsible for `instruction.yaml`, `.env`, pipeline execution, and final synthesis.
-Run the graphics pass only after phase 3 outputs exist so it can work from shared artifacts instead of recollecting data.
-Use the graphics agent for bar charts, pies or donuts, Sankey diagrams, bivariate choropleths, and word clouds when the data supports them.
-Keep the repo guidance general, but leave one concrete example starter in place.
-Benchmark Sankey work against the Google Charts Sankey reference and the repo starter in `examples/visualization_starters/google_sankey_template.html`.
+Keep one orchestrator agent responsible for `instruction.yaml`, `.env`, pipeline execution, case/workstream integrity, and final synthesis.
+Run any graphics polish only after the built-in dashboards and decision artifacts exist so it can work from shared artifacts instead of recollecting data.
+Prefer the built-in executive and analyst dashboards over bespoke charts unless the user explicitly needs export polish.
 
 ## Stage 1 — Interview
 
 Collect these inputs conversationally. Ask one question at a time. If the user is unsure, generate sensible defaults and keep moving.
 
-### Q1: What do you want to investigate?
+### Q1: What case are we running?
 
-Get a clear description of the market, product, or topic. Probe for specifics:
+Get a clear description of the market, product, or topic, plus the decision the case should support. Probe for specifics:
 - Target audience (who are the users?)
 - Geography (global, US, specific city?)
 - Time frame (recent trends, historical patterns?)
@@ -51,7 +52,16 @@ Examples of valid user inputs:
 - "What do EV owners hate about charging infrastructure?"
 - "How do parents feel about kids' electric toothbrushes?"
 
-### Q2: Which platforms should we search?
+### Q2: Which workstreams and platforms matter?
+
+Clarify the workstreams first:
+- unmet needs
+- benchmark comparison
+- skeptic review
+- ICP/segment analysis
+- follow-up validation
+
+Then decide which platforms should be used for those workstreams.
 
 Show what's available and let them pick:
 - **YouTube** — longest, most detailed user stories (requires `YOUTUBE_API_KEY`)
@@ -140,14 +150,23 @@ After phase 3, the `analysis`, `writing`, and `graphics` agents can work in para
 ## What to inspect after a run
 
 Primary outputs:
-- `output/trend_report.md` — Google search interest direction
-- `output/tsi_anomaly_report.md` — discussion volume spikes (if TSI enabled)
-- `output/summary_report.md` — category rankings, platform comparison
-- `output/quotable_excerpts.md` — best verbatim quotes
-- `output/summary_stats.json` — machine-readable statistics
-- `output/all_posts.csv` — every post collected (anonymized)
-- `output/validation_report.md` — academic cross-reference (if enabled)
-- `output/visualizations/` — optional graphics-agent charts, including `svg` and `png` exports and optional `ai` masters
+- `output/summary_report.md`
+- `output/decision_memo.md`
+- `output/issue_registry.csv`
+- `output/evidence_registry.csv`
+- `output/entity_registry.csv`
+- `output/benchmark_coverage.json`
+- `output/contradiction_registry.csv`
+- `output/opportunity_map.csv`
+- `output/recommendation_cards.json`
+- `output/annotation_pack.csv`
+- `output/eval_report.md`
+- `output/agent_plan.json`
+- `output/agent_execution_log.json`
+- `output/agent_handoff_log.json`
+- `output/run_manifest.json`
+- `output/history_diff.md` when history is enabled
+- `output/visualizations/` for built-in dashboards
 
 Checkpoints: `output/checkpoints/phase*.json`
 
@@ -155,13 +174,12 @@ Checkpoints: `output/checkpoints/phase*.json`
 
 When summarizing for the user:
 
-1. **Lead with quotes.** Open with the 2-3 strongest verbatim quotes from `quotable_excerpts.md`. Real user words are more compelling than statistics.
-2. **Trend direction.** "Interest in [topic] is rising/falling/stable, up X% year-over-year."
-3. **Ranked categories.** Top 5 unmet-need categories by frequency.
-4. **Platform comparison.** "Socket fit complaints appear 3x more on Reddit than YouTube" — which problems surface where?
-5. **Anomalies** (if TSI ran). "Discussion about [category] spiked in [month]."
-6. **Call out failures.** Be transparent about any platforms that failed, quota limits hit, or thin data.
-7. **Offer refinement.** Ask if they want to adjust categories, add search terms, drill deeper into a specific finding, or re-run with different parameters.
+1. **Lead with evidence.** Open with short quotes or excerpts that anchor the top issues.
+2. **Surface benchmark context.** Say what benchmark sources and contradictions imply.
+3. **Separate evidence, inference, and recommendation.**
+4. **Use history when available.** Call out what is new, rising, or declining across runs.
+5. **Call out failures and thin evidence.** Be transparent about weak source mix, auth failures, or quota limits.
+6. **Offer the next validation loop.** Suggest benchmark, review, or hypothesis follow-up instead of only more collection.
 
 ## Common failure modes
 

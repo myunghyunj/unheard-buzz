@@ -79,14 +79,24 @@ class EvalMetricsTest(unittest.TestCase):
                     {
                         "canonical_issue_id": issue_layer["issues"][0].canonical_issue_id,
                         "status_label": "stable",
+                        "lifecycle_state": "sustained",
                     }
                 ]
             },
-            review_summary={"annotation_count": 1, "applied_counts": {"recommendation": 1}, "override_rate": 1.0},
+            review_summary={
+                "annotation_count": 1,
+                "applied_counts": {"recommendation": 1},
+                "override_rate": 1.0,
+                "annotation_sources": {"manual_csv": 1, "review_memory": 1},
+                "manual_annotation_count": 1,
+                "memory_annotation_count": 1,
+            },
         )
 
         self.assertEqual(metrics["recommendation_traceability"]["traceability_rate"], 1.0)
         self.assertIn("stability_score", metrics["ranking_stability"])
+        self.assertIn("lifecycle_counts", metrics["ranking_stability"])
+        self.assertEqual(metrics["reviewer_agreement"]["memory_annotation_count"], 1)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             outputs = write_eval_outputs(
@@ -94,8 +104,15 @@ class EvalMetricsTest(unittest.TestCase):
                 benchmark_pack,
                 decision_pack,
                 tmpdir,
-                history_data={"issues": [{"canonical_issue_id": issue_layer["issues"][0].canonical_issue_id, "status_label": "stable"}]},
-                review_summary={"annotation_count": 1, "applied_counts": {"recommendation": 1}, "override_rate": 1.0},
+                history_data={"issues": [{"canonical_issue_id": issue_layer["issues"][0].canonical_issue_id, "status_label": "stable", "lifecycle_state": "sustained"}]},
+                review_summary={
+                    "annotation_count": 1,
+                    "applied_counts": {"recommendation": 1},
+                    "override_rate": 1.0,
+                    "annotation_sources": {"manual_csv": 1, "review_memory": 1},
+                    "manual_annotation_count": 1,
+                    "memory_annotation_count": 1,
+                },
             )
             self.assertTrue(os.path.exists(outputs["eval_report_md"]))
             self.assertTrue(os.path.exists(outputs["ranking_stability_json"]))
@@ -103,8 +120,12 @@ class EvalMetricsTest(unittest.TestCase):
             self.assertTrue(os.path.exists(outputs["reviewer_agreement_summary_json"]))
             with open(outputs["ranking_stability_json"], "r", encoding="utf-8") as handle:
                 ranking = json.load(handle)
+            with open(outputs["eval_report_md"], "r", encoding="utf-8") as handle:
+                eval_report = handle.read()
 
         self.assertIn("stability_score", ranking)
+        self.assertIn("lifecycle_counts", ranking)
+        self.assertIn("Reused reviewer memory rows", eval_report)
 
 
 if __name__ == "__main__":

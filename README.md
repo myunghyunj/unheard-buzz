@@ -1,13 +1,15 @@
 # unheard-buzz 🐝
 
-Unheard-Buzz is an agent-first social listening toolkit for mining unmet needs from public online conversations.
+Unheard-Buzz is a local, stateful, agent-code hybrid consultant for unmet-need discovery, benchmark triangulation, contradiction review, and recommendation support.
 
-The idea is simple:
+The repo still starts from public evidence, but it no longer stops at "social listening."
 
-- 🧠 the LLM handles planning, interviewing, and orchestration
-- 🖥️ your local machine handles API calls, retries, checkpoints, files, and long-running work
+The operating split is:
 
-That split matters. Chat-only environments are often weak at filesystem access, internet access, long jobs, and recovery after partial failures. This repo is designed to run on your own machine so the agent can stay conversational while the actual collection and reporting happen locally. **Note that parallel collectors may consume rate limits exponentially, so post-run parallel agents should reuse shared artifacts instead of recollecting data.**
+- 🧠 the agent handles scoping, workstream planning, interpretation, and review
+- 🖥️ your local machine handles connectors, checkpoints, persistent state, artifact generation, and repeatable execution
+
+That split matters because chat-only environments are weak at filesystem access, long jobs, and run-over-run memory. This repo is designed so the agent can stay conversational while the evidence, decisions, and review artifacts are generated locally and kept traceable over time.
 
 ## What this helps you do 🔍
 
@@ -18,13 +20,13 @@ Use it for questions like:
 - 🐾 What frustrates pet owners about tele-vet services?
 - 🎮 What unmet needs show up in indie game publishing communities?
 
-You define a topic, keywords, platforms, and category schema in `instruction.yaml`, and the pipeline:
+You define a case, workstreams, platforms, and analysis schema in `instruction.yaml`, and the pipeline:
 
-1. 📥 collects posts across platforms
-2. 🔄 normalizes them into a shared `SocialPost` model
-3. 🧹 filters low-signal and near-duplicate content
-4. 🎯 scores relevance and category fit
-5. 📝 generates report-ready outputs
+1. 📥 collects and normalizes evidence across platforms
+2. 🔄 clusters posts into issue and evidence layers
+3. 🧭 links issues to entities, benchmarks, and contradictions
+4. 🎯 scores opportunity, confidence, and decision relevance
+5. 📝 generates decision, review, history, and dashboard artifacts
 
 ## Before you start 🛠️
 
@@ -122,21 +124,24 @@ Good prompts usually include:
 
 If you already know you want a multi-agent workflow, say so explicitly. For example:
 
-- `Run the research, then split into parallel search, analysis, writing, and graphics agents.`
-- `After the pipeline finishes, have a graphics agent make a bar chart and a Sankey if the data supports it.`
+- `Run this as a stateful consultant case and split into unmet-needs, benchmark, skeptic, and writer workstreams.`
+- `After the pipeline finishes, use the built-in dashboards first, then let graphics refine export polish only if needed.`
 
 ## Parallel agent pattern 🧩
 
-This repo works especially well with a small agent swarm after the research brief is clear and the pipeline outputs exist.
+This repo works best with a small consultant team after the case brief is clear and the core artifacts exist.
 
-- `search` agent: expands subreddits, channels, queries, benchmarks, and external context
-- `analysis` agent: inspects `summary_stats.json`, coded exports, and checkpoints to quantify patterns
-- `writing` agent: turns the evidence into a quote-first memo, summary, or deck narrative
-- `graphics` agent: turns the same evidence into clean visuals under `output/visualizations/`, with static `svg` and `png` exports and an editable `ai` master when needed
+- `orchestrator`: owns `instruction.yaml`, case scope, pipeline execution, and final synthesis
+- `source_scout`: expands queries, connectors, and benchmark sources
+- `issue_analyst`: interprets issue/evidence/entity outputs
+- `benchmark_analyst`: inspects benchmark coverage and contradictions
+- `skeptic`: stress-tests recommendations and confidence claims
+- `writer`: turns the artifact pack into a client-ready memo
+- `reviewer`: uses `annotation_pack.csv` and override inputs
+- `graphics`: optional export-polish role after built-in dashboards already exist
 
-The Python pipeline is still the execution backbone. The parallel agents are best used after collection and report generation so they can work from the same artifacts instead of competing for API quota.
-
-For graphics work, keep the repo guidance general but leave one concrete example in place. Benchmark Sankey diagrams against the Google Charts Sankey reference and the repo's starter template in `examples/visualization_starters/google_sankey_template.html`. That starter is generic by design and ships with a prosthetics-funnel example dataset. More chart guidance lives in `docs/GRAPHICS_AGENT.md`.
+The pipeline remains the execution backbone. Agents should prefer shared artifacts like `issue_registry.csv`, `benchmark_coverage.json`, `decision_memo.md`, `annotation_pack.csv`, and the built-in dashboards instead of recollecting evidence.
+When state is enabled, prior reviewer overrides can also be reused as reviewer memory instead of starting every review loop from zero.
 
 ## API keys: what you need and where to get them 🔑
 
@@ -281,52 +286,33 @@ These settings matter a lot in practice:
 
 They help keep the workflow practical on real, noisy internet data.
 
-## How posts are scored 📊
+## How scoring works 📊
 
-Scoring runs in two stages.
+The repo still uses lightweight collector heuristics to keep collection practical, but the main ranking story is now issue-level.
 
-**Stage 1 — Collector score** 🔎 (at collection time, per platform)
+Current scoring layers:
 
-Filters noise before any expensive analysis runs.
+- `collector_score`
+  - platform-local triage signal used during collection
+  - helpful for quota efficiency, not the final consultant ranking
 
-| Component | Rule | Max contribution |
-|-----------|------|-----------------|
-| Keyword hits | +1.5 per relevance keyword found in text | unbounded |
-| Length | +1.0 if 40–400 normalized characters | 1.0 |
-| Engagement | likes ÷ 10, capped | 5.0 |
-| Post type | +1.0 if top-level post, +0.5 if reply | 1.0 |
+- `opportunity_score`
+  - issue-level weighted score over severity, urgency, independent frequency, buyer intent, business impact, and strategic fit
 
-**Stage 2 — Final rank score** 🏆 (at analysis time, shared across platforms)
+- `confidence_score`
+  - issue-level weighted score over source quality, corroboration, source diversity, recency, specificity, and extraction quality
 
-Determines which posts surface in reports and excerpts.
+- `priority_score`
+  - final issue priority computed from opportunity and confidence
+  - exposed as the backward-compatible alias `final_rank_score`
 
-| Component | Weight | What it measures |
-|-----------|-------:|-----------------|
-| Relevance score | 40% | keyword density against the full relevance list |
-| Collector score | 35% | signal quality from Stage 1, normalized to 0–1 |
-| Category score | 25% | strength of match against the best-fitting complaint category |
-| Wish bonus | +0.15 flat | post contains wish/want/need/hope language |
-| Engagement bonus | +up to 0.25 | like count ÷ 50, capped |
+- `decision_score`
+  - recommendation-oriented score that adds benchmark gap, switching friction, segment concentration, and history trend context
 
-**Example** 💡
-
-Post: *"My socket hurts after an hour — the suction keeps failing and I sweat so much it stops gripping."*
-
-| Stage | Calculation | Score |
-|-------|-------------|------:|
-| Keyword hits (socket, suction, sweat) | 3 × 1.5 | 4.5 |
-| Length bonus | within 40–400 chars | +1.0 |
-| Engagement | 8 likes ÷ 10 | +0.8 |
-| Post type | top-level | +1.0 |
-| **Collector score** | | **7.3 / 10** |
-| Relevance (0.40) | 3 hits ÷ 3 cap = 1.0 | 0.40 |
-| Collector norm (0.35) | 7.3 ÷ 8 = 0.91 | 0.32 |
-| Category SF (0.25) | 2 keyword hits in socket category | 0.17 |
-| Wish bonus | no wish word present | 0.00 |
-| Engagement bonus | 8 likes ÷ 50 | +0.16 |
-| **Final rank score** | | **0.95** |
-
-The wish bonus is intentionally flat — a zero-like post saying *"I wish I could feel what I'm gripping"* carries the same wish signal as a viral one.
+The important contract is:
+- evidence is not the same as inference
+- inference is not the same as recommendation
+- recommendation confidence must stay bounded by provenance and contradiction coverage
 
 ## Outputs 📁
 
@@ -334,29 +320,51 @@ Typical outputs include:
 
 - 📄 `trend_report.md`
 - 📄 `summary_report.md`
+- 📄 `decision_memo.md`
+- 📄 `case_plan.md`
+- 📄 `workstream_status.md`
 - 📄 `quotable_excerpts.md`
 - 📊 `all_posts.csv`
 - 📊 `coded_posts.csv`
 - 📊 `coded_comments.csv`
 - 📊 `source_registry.csv`
+- 📊 `issue_registry.csv`
+- 📊 `evidence_registry.csv`
+- 📊 `entity_registry.csv`
+- 📊 `issue_entity_links.csv`
+- 📊 `opportunity_map.csv`
+- 📊 `segment_pain_matrix.csv`
+- 📊 `hypothesis_backlog.csv`
+- 📊 `annotation_pack.csv`
 - 📊 `channel_registry.csv` when YouTube collection runs
 - 📊 `video_registry.csv` when YouTube collection runs
 - 📊 `summary_stats.json`
+- 📊 `dashboard_data.json`
+- 📊 `benchmark_coverage.json`
+- 📊 `recommendation_cards.json`
+- 📊 `workstream_registry.json`
+- 📊 `agent_plan.json`
+- 📊 `agent_execution_log.json`
+- 📊 `agent_handoff_log.json`
+- 📊 `artifact_inventory.json`
+- 📊 `run_manifest.json`
+- 📊 `history_summary.json`
+- 📄 `history_diff.md`
+- 📄 `annotation_guidelines.md`
+- 📄 `eval_report.md`
 - 📄 `validation_report.md`
 - 📄 `tsi_anomaly_report.md` when the optional TSI step is enabled
-- 🎨 `visualizations/*.html`
-- 🎨 `visualizations/*.svg`
-- 🎨 `visualizations/*.png`
-- 🎨 `visualizations/*.ai` when an editable Illustrator master is part of the handoff
+- 🎨 `visualizations/executive_dashboard.html`
+- 🎨 `visualizations/analyst_drilldown.html`
 
-The `visualizations/` artifacts are optional post-processing outputs produced by a graphics agent after the core pipeline completes. When graphics are created, prefer shipping both `svg` and `png`; keep `ai` alongside them when Illustrator is used for the final polish.
+The HTML dashboards are built into the pipeline. Graphics export polish can still happen later, but the repo no longer depends on a placeholder post-run graphics step to have usable dashboards.
 
 These are designed to be easy to inspect, share, and move into research notes, client memos, or slides.
 
 ## Sample visualization 📈
 
 Below is a static preview from the amputee sample-output bundle.
-The interactive HTML version was visualized after the pipeline results were retrieved, which is the same post-run handoff the dedicated graphics agent should follow.
+The repo now also generates built-in HTML dashboards directly from `dashboard_data.json`.
 
 ![Amputee wish intensity donut](examples/amputee_sample_output/visualizations/wish_intensity_donut_clean.svg)
 
@@ -396,32 +404,36 @@ That usually gives better signal and makes debugging easier.
 
 ## Current strengths ✅
 
-Unheard-Buzz is strongest today as a configurable workflow engine for unmet-need discovery.
+Unheard-Buzz is strongest today as a local consultant workbench for evidence-backed unmet-need analysis.
 
 It already does a few things well:
 
 - 🔄 cross-platform normalization into a shared `SocialPost` model
-- 🧹 collector-level filtering and deduplication
-- ⚙️ configurable category and segment schemas
-- 🎯 relevance and category scoring
-- 📝 report generation for summaries, quotes, stats, and coded exports
-- 🎨 post-run visualization handoff for graphics-agent charting
-- 🗂️ source and YouTube registry generation for auditability
-- 💾 checkpoint-aware execution
+- 🧹 filtering, deduplication, and issue/evidence clustering
+- 🧭 entity, benchmark, and contradiction layers
+- 🎯 issue-level scoring plus recommendation-oriented decision scoring
+- 📝 decision, review, and eval artifact generation
+- 💾 persistent state, run manifests, and history diffs
+- 📊 built-in executive and analyst dashboards
 
-It is especially useful when the value comes from real user language, not polished survey answers.
+It is especially useful when the value comes from traced public evidence, not polished survey answers.
 
-## What it is not yet 🚧
+## What it is not 🚧
 
-This repository is not yet a full semantic intelligence stack.
+This repository is not:
 
-That means:
+- a fully autonomous strategy consultant
+- a truth engine
+- legal, compliance, or policy advice
+- an unrestricted scraper
+- a replacement for expert human review in sensitive domains
 
-- 🌐 multilingual understanding is still partial
-- 🔤 language handling is improving but not fully production-grade
-- 📊 ranking is better than before, but still heuristic-heavy
-- 🔌 some platform adapters are stronger than others
-- ✏️ the system still depends heavily on good query design and category design
+Current limitations still include:
+
+- 🌐 multilingual and regional coverage is partial
+- 🔌 source coverage is uneven across connector classes
+- 🧠 clustering and contradiction handling still rely on deterministic heuristics
+- ✏️ outcome quality still depends heavily on good case framing, source mix, and review discipline
 
 ## Project structure 🗂️
 
@@ -433,6 +445,9 @@ unheard-buzz/
 ├── docs/
 │   ├── README.md
 │   ├── ARCHITECTURE.md
+│   ├── ARTIFACT_GUIDE.md
+│   ├── AGENT_CONTROL_PLANE.md
+│   ├── GOVERNANCE_AND_SOURCE_POLICY.md
 │   └── GRAPHICS_AGENT.md
 ├── .github/
 │   ├── CONTRIBUTING.md
@@ -442,6 +457,7 @@ unheard-buzz/
 ├── instruction_template.yaml
 ├── examples/
 │   └── visualization_starters/
+├── scripts/
 ├── tools/
 ├── tests/
 ├── input/
@@ -454,6 +470,7 @@ unheard-buzz/
 python3 -m py_compile tools/*.py
 python3 -m unittest discover -s tests -v
 python3 tools/run.py --instruction examples/amputee.yaml --dry-run
+bash scripts/run_master_validation.sh .
 ```
 
 ## Future plans 🌍
@@ -474,6 +491,4 @@ The important distinction is this:
 
 ## One-line summary 💡
 
-Unheard-Buzz is a human-LLM interfacing tool-box.
-
-It is an agent-driven research workflow that uses the user's own machine to do the internet-facing work that chat-only environments often cannot do well.
+Unheard-Buzz is a local, stateful, benchmark-aware consultant operating system for turning messy public evidence into issue intelligence, recommendations, review packs, and repeatable case memory.

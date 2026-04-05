@@ -8,41 +8,42 @@ Read that file when you need internals, debugging details, extension guidance, o
 
 ## Mission
 
-Help users discover unmet market needs by mining social media platforms and summarizing the findings in a way that is useful for product, GTM, and research decisions.
+Help users run evidence-backed consulting cases that turn public signals into issue intelligence, benchmark context, contradictions, recommendations, review packs, and repeatable case memory.
 
 ## Default workflow
 
-1. Interview the user one question at a time.
+1. Clarify the case, decision objective, and workstreams.
 2. Generate or update `instruction.yaml`.
 3. Ensure `.env` contains the required API keys.
-4. Run the pipeline.
-5. Read the generated reports in `output/`.
-6. Summarize findings with real user quotes first, then patterns and next steps.
+4. Run the pipeline with state/history when appropriate.
+5. Read the generated issue, benchmark, decision, review, eval, and dashboard artifacts in `output/`.
+6. Summarize findings by separating evidence, inference, recommendation, and open questions.
 
 ## Parallel agent posture
 
 Once the brief is clear, prefer a small parallel swarm instead of a single monolithic agent.
 
-- `search` agent: expand channels, subreddits, search phrases, and external benchmark checks
-- `analysis` agent: inspect `summary_stats.json`, coded exports, checkpoints, and platform differences
-- `writing` agent: draft the user-facing memo with quotes first, then rankings and next steps
-- `graphics` agent: create charts in `output/visualizations/` from the generated artifacts and export `svg` plus `png`, with `ai` when Illustrator editing is part of the workflow
+- `source_scout` agent: expand channels, subreddits, search phrases, and benchmark sources
+- `issue_analyst` agent: inspect `issue_registry.csv`, `evidence_registry.csv`, and `dashboard_data.json`
+- `benchmark_analyst` agent: inspect `benchmark_coverage.json`, `contradiction_registry.csv`, and alternatives
+- `skeptic` agent: challenge recommendation quality, contradiction handling, and evidence sufficiency
+- `writer` agent: draft the user-facing memo with clear evidence/inference/recommendation separation
+- `reviewer` agent: use `annotation_pack.csv` and review guidelines
+- `graphics` agent: optional polish role after built-in dashboards already exist
 
-Keep one orchestrator agent responsible for `instruction.yaml`, `.env`, pipeline execution, and final synthesis.
-Start the graphics pass only after the phase 3 outputs exist.
-Use the graphics agent for bar charts, pie or donut charts, Sankey diagrams, bivariate choropleths, and word clouds when the data supports them.
-Keep the repo guidance general, but leave one concrete example starter in place.
-Benchmark Sankey work against the Google Charts Sankey reference and the repo starter in `examples/visualization_starters/google_sankey_template.html`.
+Keep one orchestrator agent responsible for `instruction.yaml`, `.env`, pipeline execution, case/workstream integrity, and final synthesis.
+Start any graphics polish only after the built-in dashboards and decision artifacts already exist.
+Prefer the built-in executive and analyst dashboards over bespoke charts unless the user explicitly needs export polish.
 
 ## Stage 1 - Interview
 
 Collect these inputs conversationally:
 
-1. What market, product, audience, or pain point should we investigate?
-2. Which platforms should we search?
-3. Which API keys are already available?
-4. What unmet-need categories should we classify into?
-5. Are there specific subreddits, channels, hashtags, or search phrases to prioritize?
+1. What case are we running, and what decision should it support?
+2. Which workstreams matter: unmet needs, benchmark comparison, skeptic review, ICP/segment analysis, or follow-up validation?
+3. Which platforms and source classes should we search?
+4. Which API keys are already available?
+5. What unmet-need categories, segments, or benchmark entities should we prioritize?
 
 Ask one question at a time.
 If the user is unsure, generate sensible defaults and keep moving.
@@ -116,14 +117,23 @@ Useful flags:
 
 Primary outputs:
 
-- `output/trend_report.md`
-- `output/tsi_anomaly_report.md` when Timeseries Insights is enabled
 - `output/summary_report.md`
-- `output/quotable_excerpts.md`
-- `output/summary_stats.json`
-- `output/all_posts.csv`
-- `output/validation_report.md` when validation is enabled
-- `output/visualizations/` when a graphics agent produces charts, including `svg` and `png` exports and optional `ai` masters
+- `output/decision_memo.md`
+- `output/issue_registry.csv`
+- `output/evidence_registry.csv`
+- `output/entity_registry.csv`
+- `output/benchmark_coverage.json`
+- `output/contradiction_registry.csv`
+- `output/opportunity_map.csv`
+- `output/recommendation_cards.json`
+- `output/annotation_pack.csv`
+- `output/eval_report.md`
+- `output/agent_plan.json`
+- `output/agent_execution_log.json`
+- `output/agent_handoff_log.json`
+- `output/run_manifest.json`
+- `output/history_diff.md` when history is enabled
+- `output/visualizations/` for built-in dashboards
 
 Checkpoint artifacts:
 
@@ -136,12 +146,12 @@ Checkpoint artifacts:
 
 When summarizing for the user:
 
-1. Lead with the strongest real quotes from `quotable_excerpts.md`
-2. Give the trend direction from Google Trends when available
-3. Rank the top unmet-need categories by frequency
-4. Compare which issues show up disproportionately on each platform
-5. Call out any platform failures, auth problems, or quota limits
-6. Offer a refinement loop: tighter categories, new queries, or deeper drilling
+1. Lead with the strongest real evidence and short quotes.
+2. State the top issues and what benchmarks or contradictions say about them.
+3. Separate evidence from inference from recommendation.
+4. Call out what changed vs prior runs when state/history exists.
+5. Call out platform failures, auth problems, quota limits, or weak evidence coverage.
+6. Offer the next review or validation loop, not just a new search loop.
 
 ## Common failure modes
 
@@ -176,4 +186,4 @@ Keep deep internals in `docs/ARCHITECTURE.md`.
 
 ## v4 Operating update
 
-For consulting-grade issue intelligence runs, default to enabling RSS and GitHub Issues alongside social platforms when configured, and emphasize issue/evidence outputs (`issue_registry.csv`, `evidence_registry.csv`, dashboards) in final synthesis.
+For consulting-grade runs, default to treating RSS and GitHub Issues as benchmark-strength evidence when configured, and emphasize issue/evidence/benchmark/decision/review outputs in final synthesis.
