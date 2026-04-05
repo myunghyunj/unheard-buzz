@@ -670,7 +670,14 @@ def run_youtube(instruction: Instruction) -> dict:
         post.metadata.setdefault("evidence_class", "community_comment")
         post.metadata.setdefault("publication_date", post.timestamp)
         post.metadata.setdefault("trust_weight", instruction.source_policy.trust_weights.get("community", 0.5))
-        post.metadata.setdefault("independence_key", "community:youtube.com")
+        normalized_channel = _normalize_channel_key(
+            str(post.metadata.get("channel") or post.metadata.get("channel_name") or "")
+        )
+        if normalized_channel:
+            independence_key = f"youtube:channel:{normalized_channel}".lower()
+        else:
+            independence_key = f"youtube:video:{post.source_id or post.post_id}".lower()
+        post.metadata.setdefault("independence_key", independence_key)
 
     reply_posts = [p for p in posts if p.is_reply]
     unique_authors = len({p.author for p in posts})

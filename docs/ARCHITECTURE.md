@@ -24,13 +24,39 @@ tools/run.py -> run_pipeline()
       +--> Phase 2: tools/analyzer.py
       +--> Phase 2b: tools/trends.py (optional TSI anomaly pass)
       |
-      `--> Phase 3: tools/reports.py
+      +--> Phase 3: tools/reports.py
               |- all_posts.csv
+              |- issue_registry.csv
+              |- evidence_registry.csv
+              |- entity_registry.csv
+              |- issue_entity_links.csv
+              |- benchmark_coverage.json
+              |- contradiction_registry.csv
+              |- alternatives_matrix.csv
+              |- decision_memo.md
+              |- opportunity_map.csv
+              |- segment_pain_matrix.csv
+              |- hypothesis_backlog.csv
+              |- research_questions.md
+              |- recommendation_cards.json
+              |- annotation_pack.csv
+              |- annotation_guidelines.md
+              |- eval_report.md
+              |- ranking_stability.json
+              |- benchmark_leakage_report.json
               |- summary_stats.json
               |- summary_report.md
               |- quotable_excerpts.md
               |- tsi_anomaly_report.md
               `- validation_report.md
+      |
+      +--> Phase 3a: tools/state_store.py + tools/history.py (optional)
+      |       |- state/*.sqlite3|*.duckdb
+      |       |- run_manifest.json
+      |       |- history_diff.md
+      |       `- history_summary.json
+      |
+      `--> Phase 3b: tools/visualizations.py (optional)
 ```
 
 ## Agent orchestration layer
@@ -147,14 +173,45 @@ Order of operations:
 4. write `source_registry.csv`
 5. optionally write YouTube registries (`channel_registry.csv`, `video_registry.csv`)
 6. select and write `quotable_excerpts.md`
-7. compute and write `summary_stats.json`
-8. write `summary_report.md`
-9. optionally write `validation_report.md`
+7. write issue intelligence exports (`issue_registry.csv`, `evidence_registry.csv`)
+8. write entity and benchmark exports (`entity_registry.csv`, `issue_entity_links.csv`, `benchmark_coverage.json`, `contradiction_registry.csv`, `alternatives_matrix.csv`)
+9. write decision outputs (`decision_memo.md`, `opportunity_map.csv`, `segment_pain_matrix.csv`, `hypothesis_backlog.csv`, `research_questions.md`, `recommendation_cards.json`)
+10. write review and eval outputs (`annotation_pack.csv`, `annotation_guidelines.md`, `eval_report.md`, `ranking_stability.json`, `benchmark_leakage_report.json`, optional `reviewer_agreement_summary.json`)
+11. compute and write `summary_stats.json`
+12. write `summary_report.md`
+13. optionally write `validation_report.md`
+
+### Phase 3a - Optional state store and history
+
+Implemented in `tools/state_store.py` and `tools/history.py`.
+
+- Additive to the existing file-based outputs
+- Persists runs, posts, issues, evidence, sources, issue run metrics, entities, issue-entity links, benchmark documents, benchmark claims, and contradiction records
+- Supports local persistence with SQLite by default and DuckDB when available
+- Writes `run_manifest.json`
+- Writes `history_diff.md` and `history_summary.json` when history is enabled
+- Designed so reruns update deduplicated records instead of multiplying identical post/evidence rows
+
+### Decision layer
+
+Implemented by `tools/decision_engine.py` and `tools/opportunity_briefs.py`.
+
+- Turns issue intelligence into evidence-linked recommendations
+- Keeps recommendation IDs, supporting issue IDs, supporting evidence IDs, and benchmark context together
+- Produces consultant-style artifacts without introducing a frontend build system
+
+### Review and eval layer
+
+Implemented by `tools/review_pack.py` and `tools/eval.py`.
+
+- Exports spreadsheet-friendly annotation packs for issue, entity, contradiction, and recommendation review
+- Supports optional reviewer overrides from `input/reviewer_annotations.csv`
+- Computes ranking stability, provenance coverage, benchmark leakage, contradiction coverage, recommendation traceability, and reviewer override rate
 
 ### Phase 3b - Optional graphics handoff
 
-Not yet implemented as a Python module.
-This is an agent-driven post-processing step that turns the generated outputs into charts and static presentation assets.
+Implemented in `tools/visualizations.py`.
+This is a post-processing step that turns the generated outputs into charts and static presentation assets.
 
 Typical inputs:
 
@@ -189,6 +246,12 @@ It compares detected category rankings against the user-provided references in `
 - `tools/linkedin.py`: token check plus fallback to `input/linkedin_export.csv`
 - `tools/analyzer.py`: spam filtering, relevance detection, wish tagging, category assignment, cross-platform insights
 - `tools/reports.py`: CSV, JSON, markdown reports, quote selection, validation output
+- `tools/decision_engine.py`: recommendation scoring, opportunity mapping, hypothesis generation
+- `tools/opportunity_briefs.py`: memo and research-question rendering for decision outputs
+- `tools/review_pack.py`: annotation pack export and reviewer override application
+- `tools/eval.py`: review/eval metrics and audit-ready reports
+- `tools/state_store.py`: local persistent warehouse for deduplicated run/post/issue/evidence state
+- `tools/history.py`: run-over-run issue diffing and history artifact generation
 - `tools/trends.py`: Google Trends context report and related-query analysis
 - `tools/trends.py`: also hosts the optional Google Timeseries Insights anomaly backend
 
@@ -229,7 +292,8 @@ It compares detected category rankings against the user-provided references in `
 - TSI anomaly quality depends on timestamp coverage and category labeling quality
 - Quote selection favors relevant, high-scoring, category-covering posts; it is heuristic, not model-based
 - Validation is comparison against user-supplied references, not independent academic retrieval
-- There is no dedicated visualization generator in the Python pipeline yet; presentation charts are currently produced by agents from the saved outputs
+- Reviewer overrides currently adjust derived decision/eval outputs and audit summaries without mutating the underlying issue/evidence base tables
+- Entity extraction and benchmark contradiction detection remain deterministic heuristics, so nuanced semantic matches may still need reviewer cleanup
 
 ## Error handling patterns
 

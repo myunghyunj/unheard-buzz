@@ -81,6 +81,35 @@ class ReportingConfig:
     top_category_limit: int = 10
 
 
+@dataclass
+class ManualSourceConfig:
+    name: str = ""
+    kind: str = ""
+    url: str = ""
+    source_family: str = "official"
+    source_tier: int = 1
+    entity: str = ""
+    entity_type: str = "company"
+    tags: List[str] = field(default_factory=list)
+    aliases: List[str] = field(default_factory=list)
+    excerpt: str = ""
+    claims: List[str] = field(default_factory=list)
+
+
+@dataclass
+class AlternativesConfig:
+    tracked_entities: List[str] = field(default_factory=list)
+
+
+@dataclass
+class BenchmarkConfig:
+    enabled: bool = False
+    manual_sources: List[ManualSourceConfig] = field(default_factory=list)
+    benchmark_feeds: List[dict] = field(default_factory=list)
+    alternatives: AlternativesConfig = field(default_factory=AlternativesConfig)
+    entity_aliases: Dict[str, List[str]] = field(default_factory=dict)
+
+
 # ---------------------------------------------------------------------------
 # Unified instruction
 # ---------------------------------------------------------------------------
@@ -109,6 +138,9 @@ class Instruction:
     source_policy: "SourcePolicyConfig" = field(default_factory=lambda: SourcePolicyConfig())
     scoring: "ScoringConfig" = field(default_factory=lambda: ScoringConfig())
     visualization: "VisualizationConfig" = field(default_factory=lambda: VisualizationConfig())
+    state_store: "StateStoreConfig" = field(default_factory=lambda: StateStoreConfig())
+    history: "HistoryConfig" = field(default_factory=lambda: HistoryConfig())
+    benchmarks: "BenchmarkConfig" = field(default_factory=lambda: BenchmarkConfig())
     # Platform configs
     youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
     reddit: RedditConfig = field(default_factory=RedditConfig)
@@ -193,6 +225,22 @@ class VisualizationConfig:
     analyst_drilldown: bool = True
     include_time_trend: bool = True
     include_heatmap: bool = True
+
+
+@dataclass
+class StateStoreConfig:
+    enabled: bool = False
+    backend: str = "sqlite"
+    path: str = "state/unheard_buzz.sqlite3"
+    project_id: str = ""
+    keep_raw_text: bool = True
+
+
+@dataclass
+class HistoryConfig:
+    enabled: bool = False
+    lookback_runs: int = 5
+    emit_diff_report: bool = True
 
 
 def load_instruction(yaml_path: str) -> Instruction:
@@ -288,6 +336,55 @@ def load_instruction(yaml_path: str) -> Instruction:
         analyst_drilldown=bool(visualization.get("analyst_drilldown", True)),
         include_time_trend=bool(visualization.get("include_time_trend", True)),
         include_heatmap=bool(visualization.get("include_heatmap", True)),
+    )
+    state_store = raw.get("state_store", {})
+    instr.state_store = StateStoreConfig(
+        enabled=bool(state_store.get("enabled", False)),
+        backend=str(state_store.get("backend", "sqlite") or "sqlite").strip().lower(),
+        path=str(state_store.get("path", "state/unheard_buzz.sqlite3") or "state/unheard_buzz.sqlite3"),
+        project_id=str(state_store.get("project_id", "") or "").strip(),
+        keep_raw_text=bool(state_store.get("keep_raw_text", True)),
+    )
+    history = raw.get("history", {})
+    instr.history = HistoryConfig(
+        enabled=bool(history.get("enabled", False)),
+        lookback_runs=int(history.get("lookback_runs", 5)),
+        emit_diff_report=bool(history.get("emit_diff_report", True)),
+    )
+    benchmarks = raw.get("benchmarks", {})
+    alternatives = benchmarks.get("alternatives", {}) if isinstance(benchmarks, dict) else {}
+    manual_sources = []
+    for source in benchmarks.get("manual_sources", []) if isinstance(benchmarks, dict) else []:
+        if not isinstance(source, dict):
+            continue
+        manual_sources.append(
+            ManualSourceConfig(
+                name=str(source.get("name", "") or ""),
+                kind=str(source.get("kind", "") or ""),
+                url=str(source.get("url", "") or ""),
+                source_family=str(source.get("source_family", "official") or "official"),
+                source_tier=int(source.get("source_tier", 1) or 1),
+                entity=str(source.get("entity", "") or ""),
+                entity_type=str(source.get("entity_type", "company") or "company"),
+                tags=[str(tag) for tag in source.get("tags", []) if str(tag).strip()],
+                aliases=[str(tag) for tag in source.get("aliases", []) if str(tag).strip()],
+                excerpt=str(source.get("excerpt", "") or ""),
+                claims=[str(tag) for tag in source.get("claims", []) if str(tag).strip()],
+            )
+        )
+    entity_aliases = {}
+    for key, values in (benchmarks.get("entity_aliases", {}) if isinstance(benchmarks, dict) else {}).items():
+        if not isinstance(values, list):
+            continue
+        entity_aliases[str(key)] = [str(value) for value in values if str(value).strip()]
+    instr.benchmarks = BenchmarkConfig(
+        enabled=bool(benchmarks.get("enabled", False)) if isinstance(benchmarks, dict) else False,
+        manual_sources=manual_sources,
+        benchmark_feeds=benchmarks.get("benchmark_feeds", []) if isinstance(benchmarks, dict) else [],
+        alternatives=AlternativesConfig(
+            tracked_entities=[str(item) for item in alternatives.get("tracked_entities", []) if str(item).strip()]
+        ),
+        entity_aliases=entity_aliases,
     )
 
     yt = platforms.get("youtube", {})
@@ -409,6 +506,10 @@ class SocialPost:
     publication_date: str = ""
     trust_weight: float = 0.5
     independence_key: str = ""
+    normalized_problem_statement: str = ""
+    business_consequence: str = ""
+    specificity_score: float = 0.0
+    extraction_quality: float = 0.0
     metadata: Dict = field(default_factory=dict)
 
     def to_csv_row(self) -> dict:
@@ -473,6 +574,10 @@ class EvidenceItem:
     excerpt: str
     url: str = ""
     platform: str = ""
+    source_title: str = ""
+    business_consequence: str = ""
+    specificity_score: float = 0.0
+    extraction_quality: float = 0.0
 
 
 @dataclass
@@ -490,6 +595,10 @@ class IssueCluster:
     confidence_score: float = 0.0
     priority_score: float = 0.0
     final_rank_score: float = 0.0
+    freshness_score: float = 0.0
+    source_mix: Dict[str, int] = field(default_factory=dict)
+    score_breakdown: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    provenance_snippets: List[str] = field(default_factory=list)
 
 
 def json_dumps_safe(value) -> str:

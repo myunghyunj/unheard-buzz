@@ -146,6 +146,8 @@ def _tweet_to_socialpost(tweet: dict) -> SocialPost:
         url=f"https://twitter.com/i/status/{tweet_id}",
         word_count=len(text.split()),
         metadata={
+            "tweet_id": tweet_id,
+            "conversation_id": conversation_id,
             "retweet_count": metrics.get("retweet_count", 0),
             "quote_count": metrics.get("quote_count", 0),
             "impression_count": metrics.get("impression_count", 0),
@@ -258,7 +260,13 @@ def run_twitter(instruction: Instruction) -> dict:
         post.metadata.setdefault("evidence_class", "community_post")
         post.metadata.setdefault("publication_date", post.timestamp)
         post.metadata.setdefault("trust_weight", instruction.source_policy.trust_weights.get("community", 0.5))
-        post.metadata.setdefault("independence_key", "community:twitter.com")
+        conversation_id = str(post.metadata.get("conversation_id") or post.source_id or "").strip()
+        if conversation_id:
+            independence_key = f"twitter:conversation:{conversation_id}".lower()
+        else:
+            fallback_post_id = str(post.metadata.get("tweet_id") or post.post_id).strip()
+            independence_key = f"twitter:post:{fallback_post_id}".lower()
+        post.metadata.setdefault("independence_key", independence_key)
 
     logger.info(
         "Twitter agent complete: %d tweets after dedup, %d lang-filtered, %d errors.",

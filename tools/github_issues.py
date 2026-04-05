@@ -39,6 +39,10 @@ def run_github_issues(instruction: Instruction) -> dict:
             created = item.get("created_at") or datetime.now(timezone.utc).isoformat()
             title = item.get("title", "")
             body = item.get("body") or ""
+            benchmark_candidate = any(
+                marker in f"{title}\n{body}".lower()
+                for marker in ("fixed", "resolved", "released", "support", "status", "available")
+            )
             source_tier = 2
             source_family = "github"
             posts.append(
@@ -59,7 +63,7 @@ def run_github_issues(instruction: Instruction) -> dict:
                     evidence_class="github_issue",
                     trust_weight=float(instruction.source_policy.trust_weights.get(source_family, 0.85)),
                     independence_key=f"github:{repo}",
-                    metadata={"repo": repo, "collector_score": 0.0},
+                    metadata={"repo": repo, "collector_score": 0.0, "benchmark_source": benchmark_candidate},
                 )
             )
 

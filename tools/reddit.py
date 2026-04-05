@@ -300,7 +300,13 @@ def run_reddit(instruction: Instruction) -> dict:
         post.metadata.setdefault("evidence_class", "community_post")
         post.metadata.setdefault("publication_date", post.timestamp)
         post.metadata.setdefault("trust_weight", instruction.source_policy.trust_weights.get("community", 0.5))
-        post.metadata.setdefault("independence_key", "community:reddit.com")
+        subreddit = re.sub(r"[^a-z0-9]+", "-", str(post.metadata.get("subreddit", "")).strip().lower()).strip("-")
+        source_id = post.source_id or post.post_id
+        if subreddit:
+            independence_key = f"reddit:{subreddit}:thread:{source_id}".lower()
+        else:
+            independence_key = f"reddit:thread:{source_id}".lower()
+        post.metadata.setdefault("independence_key", independence_key)
 
     logger.info(
         "Reddit agent complete: %d total items after dedup (%d removed), %d lang-filtered, %d errors.",

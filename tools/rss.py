@@ -66,7 +66,7 @@ def run_rss(instruction: Instruction) -> dict:
                     evidence_class=evidence_class,
                     trust_weight=trust_weight,
                     independence_key=f"{source_family}:{domain}",
-                    metadata={"domain": domain, "collector_score": 0.0},
+                    metadata={"domain": domain, "collector_score": 0.0, "benchmark_source": True},
                 )
             )
 

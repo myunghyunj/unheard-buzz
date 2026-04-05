@@ -14,6 +14,7 @@ This agent supports two modes:
 import csv
 import logging
 import os
+import re
 import sys
 
 from config import Instruction, SocialPost
@@ -46,7 +47,14 @@ def run_linkedin(instruction) -> dict:
         post.metadata.setdefault("evidence_class", "community_post")
         post.metadata.setdefault("publication_date", post.timestamp)
         post.metadata.setdefault("trust_weight", instruction.source_policy.trust_weights.get("community", 0.5))
-        post.metadata.setdefault("independence_key", "community:linkedin.com")
+        normalized_author = re.sub(r"[^a-z0-9]+", "-", (post.author or "").strip().lower()).strip("-")
+        if post.source_id:
+            independence_key = f"linkedin:post:{post.source_id}".lower()
+        elif normalized_author:
+            independence_key = f"linkedin:author:{normalized_author}".lower()
+        else:
+            independence_key = f"linkedin:post:{post.post_id}".lower()
+        post.metadata.setdefault("independence_key", independence_key)
 
     stats = {
         "platform": "linkedin",

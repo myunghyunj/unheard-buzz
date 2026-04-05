@@ -5,10 +5,12 @@ Main orchestrator for multi-platform social media analysis.
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from collections import Counter
 
@@ -16,7 +18,7 @@ from dotenv import load_dotenv
 
 from config import Instruction, SocialPost, load_instruction, OUTPUT_DIR
 from analyzer import filter_posts, posts_for_stats
-from reports import generate_all
+from reports import generate_all, generate_strategy_outputs
 
 
 def _save_checkpoint(phase: str, data: dict, output_dir: str) -> str:
@@ -34,6 +36,17 @@ def _load_checkpoint(phase: str, output_dir: str) -> Optional[dict]:
         with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     return None
+
+
+def _git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return ""
 
 
 def _posts_to_dicts(posts: List[SocialPost]) -> List[dict]:
@@ -255,9 +268,13 @@ def run_pipeline(
     output_dir: str = OUTPUT_DIR,
     resume: bool = False,
     skip_trends: bool = False,
+    project_id_override: str = "",
+    run_label: str = "",
+    no_state: bool = False,
 ) -> dict:
     os.makedirs(output_dir, exist_ok=True)
     start_time = time.time()
+    started_at_iso = datetime.now(timezone.utc).isoformat()
 
     if platforms_override:
         enabled = [p for p in platforms_override if p in _PLATFORM_RUNNERS]
@@ -412,6 +429,76 @@ def run_pipeline(
         print(f"  {name}: {path}")
     print()
 
+    state_outputs: Dict[str, str] = {}
+    state_enabled = instruction.state_store.enabled and not no_state
+    if state_enabled:
+        print("=" * 60)
+        print("PHASE 3a: State Store and History")
+        print("=" * 60)
+        try:
+            from history import compute_history_delta, write_history_outputs
+            from state_store import LocalStateStore, build_run_record
+
+            store = LocalStateStore(instruction.state_store)
+            completed_at_iso = datetime.now(timezone.utc).isoformat()
+            run_record = build_run_record(
+                instruction=instruction,
+                output_dir=output_dir,
+                started_at=started_at_iso,
+                completed_at=completed_at_iso,
+                git_commit=_git_commit(),
+                run_label=run_label,
+                project_id_override=project_id_override,
+                requested_backend=instruction.state_store.backend,
+                resolved_backend=store.resolved_backend,
+            )
+            ingest_summary = store.ingest_run(
+                run_record=run_record,
+                instruction=instruction,
+                posts=all_posts,
+                generated_files=generated,
+            )
+            history_data = {}
+            if instruction.history.enabled:
+                history_data = compute_history_delta(
+                    store,
+                    project_id=run_record["project_id"],
+                    run_id=run_record["run_id"],
+                    lookback_runs=instruction.history.lookback_runs,
+                )
+                state_outputs.update(
+                    write_history_outputs(
+                        history_data,
+                        output_dir,
+                        emit_diff_report=instruction.history.emit_diff_report,
+                    )
+                )
+            refreshed_strategy_outputs = generate_strategy_outputs(
+                all_posts,
+                instruction,
+                output_dir,
+                history_data=history_data,
+            )
+            generated.update(refreshed_strategy_outputs)
+
+            manifest = dict(run_record)
+            manifest["ingest_summary"] = ingest_summary
+            manifest["history_enabled"] = instruction.history.enabled
+            manifest["history_summary"] = history_data.get("summary", {}) if history_data else {}
+            manifest_path = os.path.join(output_dir, "run_manifest.json")
+            with open(manifest_path, "w", encoding="utf-8") as handle:
+                json.dump(manifest, handle, indent=2, ensure_ascii=False)
+            state_outputs["run_manifest_json"] = manifest_path
+
+            store.close()
+            generated.update(state_outputs)
+            for name, path in state_outputs.items():
+                print(f"  {name}: {path}")
+        except Exception as e:
+            print(f"  State/history phase skipped: {e}")
+            traceback.print_exc()
+        print()
+
     if instruction.visualization.enabled:
         print("=" * 60)
         print("PHASE 3b: Visualizations")
@@ -545,6 +632,11 @@ def _dry_run(instruction: Instruction, platforms: List[str], output_dir: str):
     print(f"Include irrelevant in stats: {instruction.include_irrelevant_in_stats}")
     print(f"Quote count: {instruction.reporting.quote_count}")
     print(f"Max co-occurrence pairs: {instruction.reporting.max_cooccurrence_pairs}")
+    print(f"State store: {'enabled' if instruction.state_store.enabled else 'disabled'}")
+    if instruction.state_store.enabled:
+        print(f"State backend: {instruction.state_store.backend}")
+        print(f"State path: {instruction.state_store.path}")
+        print(f"History: {'enabled' if instruction.history.enabled else 'disabled'}")
     print(f"TSI enabled: {tsi_enabled}")
     print(f"Validation: {'enabled' if instruction.validation_enabled else 'disabled'}")
     print()
@@ -559,6 +651,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true", help="Resume from checkpoints if available")
     parser.add_argument("--output-dir", default=OUTPUT_DIR, help=f"Output directory (default: {OUTPUT_DIR})")
     parser.add_argument("--skip-trends", action="store_true", help="Skip Google Trends analysis (Phase 0)")
+    parser.add_argument("--project-id", help="Override state_store.project_id for this run")
+    parser.add_argument("--run-label", default="", help="Optional label to attach to the persisted run")
+    parser.add_argument("--no-state", action="store_true", help="Disable the state store for this execution")
     return parser.parse_args()
 
 
@@ -586,4 +681,7 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             resume=args.resume,
             skip_trends=args.skip_trends,
+            project_id_override=args.project_id or "",
+            run_label=args.run_label,
+            no_state=args.no_state,
         )

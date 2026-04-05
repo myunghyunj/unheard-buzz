@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import tempfile
@@ -61,6 +62,37 @@ class PipelineContractsTest(unittest.TestCase):
               quote_count: 12
               max_cooccurrence_pairs: 8
               top_category_limit: 6
+
+            state_store:
+              enabled: true
+              backend: "sqlite"
+              path: "state/test.sqlite3"
+              project_id: "smoke_project"
+              keep_raw_text: false
+
+            history:
+              enabled: true
+              lookback_runs: 3
+              emit_diff_report: true
+
+            benchmarks:
+              enabled: true
+              manual_sources:
+                - name: "Vendor status"
+                  kind: "status_page"
+                  url: "https://vendor.example/status"
+                  source_family: "official"
+                  source_tier: 1
+                  entity: "VendorCo"
+                  entity_type: "company"
+                  aliases: ["vendor co"]
+                  tags: ["status"]
+                  excerpt: "Billing export is available."
+                  claims: ["Billing export is available."]
+              alternatives:
+                tracked_entities: ["RivalFlow"]
+              entity_aliases:
+                VendorCo: ["vendor"]
             """
         )
 
@@ -81,6 +113,17 @@ class PipelineContractsTest(unittest.TestCase):
         self.assertEqual(instruction.reporting.quote_count, 12)
         self.assertEqual(instruction.reporting.max_cooccurrence_pairs, 8)
         self.assertEqual(instruction.reporting.top_category_limit, 6)
+        self.assertTrue(instruction.state_store.enabled)
+        self.assertEqual(instruction.state_store.backend, "sqlite")
+        self.assertEqual(instruction.state_store.project_id, "smoke_project")
+        self.assertFalse(instruction.state_store.keep_raw_text)
+        self.assertTrue(instruction.history.enabled)
+        self.assertEqual(instruction.history.lookback_runs, 3)
+        self.assertTrue(instruction.benchmarks.enabled)
+        self.assertEqual(len(instruction.benchmarks.manual_sources), 1)
+        self.assertEqual(instruction.benchmarks.manual_sources[0].entity, "VendorCo")
+        self.assertEqual(instruction.benchmarks.alternatives.tracked_entities, ["RivalFlow"])
+        self.assertEqual(instruction.benchmarks.entity_aliases["VendorCo"], ["vendor"])
 
     def test_final_rank_score_is_deterministic(self):
         post = SocialPost(
@@ -184,7 +227,11 @@ class PipelineContractsTest(unittest.TestCase):
         self.assertIn("category_exemplars", stats)
         self.assertIn("REL", stats["category_exemplars"])
         self.assertIn("text_excerpt", stats["category_exemplars"]["REL"])
+        self.assertTrue(stats["top_issues"])
+        self.assertTrue(stats["score_breakdowns"])
+        self.assertTrue(stats["dashboard_data"]["issues"])
         self.assertIn("Representative post:", report_text)
+        self.assertIn("## Top Issues (Impact vs Confidence)", report_text)
         self.assertIn("### REL — Reliability", report_text)
 
     def test_generate_all_emits_consulting_artifacts(self):
@@ -225,6 +272,21 @@ class PipelineContractsTest(unittest.TestCase):
               quote_count: 3
               max_cooccurrence_pairs: 5
               top_category_limit: 4
+
+            benchmarks:
+              enabled: true
+              manual_sources:
+                - name: "Access status page"
+                  kind: "status_page"
+                  url: "https://access.example/status"
+                  source_family: "official"
+                  source_tier: 1
+                  entity: "AccessCo"
+                  entity_type: "company"
+                  excerpt: "Transit accessibility systems are available."
+                  claims: ["Transit accessibility systems are available."]
+              alternatives:
+                tracked_entities: ["MoveLift"]
             """
         )
 
@@ -298,8 +360,28 @@ class PipelineContractsTest(unittest.TestCase):
                 "coded_posts_csv",
                 "coded_comments_csv",
                 "source_registry_csv",
+                "source_registry_enriched_csv",
+                "issue_registry_csv",
+                "evidence_registry_csv",
                 "channel_registry_csv",
                 "video_registry_csv",
+                "entity_registry_csv",
+                "issue_entity_links_csv",
+                "alternatives_matrix_csv",
+                "contradiction_registry_csv",
+                "benchmark_coverage_json",
+                "decision_memo_md",
+                "opportunity_map_csv",
+                "segment_pain_matrix_csv",
+                "hypothesis_backlog_csv",
+                "research_questions_md",
+                "recommendation_cards_json",
+                "annotation_pack_csv",
+                "annotation_guidelines_md",
+                "eval_report_md",
+                "ranking_stability_json",
+                "benchmark_leakage_report_json",
+                "dashboard_data_json",
                 "summary_stats_json",
                 "summary_report_md",
                 "quotable_excerpts_md",
@@ -307,6 +389,43 @@ class PipelineContractsTest(unittest.TestCase):
             self.assertTrue(expected_keys.issubset(generated.keys()))
             for key in expected_keys:
                 self.assertTrue(os.path.exists(generated[key]), key)
+
+            with open(generated["summary_stats_json"], "r", encoding="utf-8") as handle:
+                stats = json.load(handle)
+            with open(generated["dashboard_data_json"], "r", encoding="utf-8") as handle:
+                dashboard = json.load(handle)
+            with open(generated["benchmark_coverage_json"], "r", encoding="utf-8") as handle:
+                benchmark_coverage = json.load(handle)
+            with open(generated["recommendation_cards_json"], "r", encoding="utf-8") as handle:
+                recommendation_cards = json.load(handle)
+            with open(generated["ranking_stability_json"], "r", encoding="utf-8") as handle:
+                ranking_stability = json.load(handle)
+            with open(generated["benchmark_leakage_report_json"], "r", encoding="utf-8") as handle:
+                benchmark_leakage = json.load(handle)
+            with open(generated["summary_report_md"], "r", encoding="utf-8") as handle:
+                report_text = handle.read()
+            with open(generated["decision_memo_md"], "r", encoding="utf-8") as handle:
+                memo_text = handle.read()
+            with open(generated["eval_report_md"], "r", encoding="utf-8") as handle:
+                eval_text = handle.read()
+
+            self.assertTrue(stats["top_issues"])
+            self.assertTrue(stats["score_breakdowns"])
+            self.assertIn("source_mix", stats)
+            self.assertIn("freshness_score", stats)
+            self.assertTrue(dashboard["issues"])
+            self.assertIn("time_trend", dashboard)
+            self.assertIn("heatmap", dashboard)
+            self.assertIn("document_count", benchmark_coverage)
+            self.assertGreaterEqual(benchmark_coverage["document_count"], 1)
+            self.assertTrue(recommendation_cards)
+            self.assertIn("history_available", ranking_stability)
+            self.assertIn("leakage_count", benchmark_leakage)
+            self.assertIn("## Evidence", memo_text)
+            self.assertIn("## Inference", memo_text)
+            self.assertIn("## Recommendation", memo_text)
+            self.assertIn("## Recommendation Traceability", eval_text)
+            self.assertIn("## Top Issues (Impact vs Confidence)", report_text)
 
     def test_language_allowlist_collector_smoke(self):
         instruction_yaml = textwrap.dedent(
